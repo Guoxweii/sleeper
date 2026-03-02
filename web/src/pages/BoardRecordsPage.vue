@@ -5,7 +5,7 @@ import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
 import {
   SESSION_TYPE_OPTIONS,
-  formatDateTime,
+  formatDateTimeWithWeekday,
   formatDuration,
   formatTypeLabel,
   minutesBetween,
@@ -346,8 +346,8 @@ onMounted(() => {
         </div>
 
         <div class="mt-3 grid gap-2 text-sm text-cyan-900/80 sm:grid-cols-2">
-          <p>入睡：{{ formatDateTime(session.startAt) }}</p>
-          <p>苏醒：{{ formatDateTime(session.endAt, '进行中') }}</p>
+          <p>入睡：{{ formatDateTimeWithWeekday(session.startAt) }}</p>
+          <p>苏醒：{{ formatDateTimeWithWeekday(session.endAt, '进行中') }}</p>
         </div>
 
         <p v-if="session.note" class="mt-2 rounded-xl bg-cyan-50 px-3 py-2 text-sm text-cyan-900/85">

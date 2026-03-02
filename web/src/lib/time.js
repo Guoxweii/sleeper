@@ -1,5 +1,7 @@
 import { DateTime } from 'luxon'
 
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
 export const SESSION_TYPE_OPTIONS = [
   { value: 'night', label: '夜间睡眠' },
   { value: 'nap', label: '午睡' },
@@ -35,6 +37,20 @@ export function formatDateTime(isoString, fallback = '-') {
   }
 
   return dt.toFormat('MM-dd HH:mm')
+}
+
+export function formatDateTimeWithWeekday(isoString, fallback = '-') {
+  if (!isoString) {
+    return fallback
+  }
+
+  const dt = DateTime.fromISO(isoString, { zone: 'utc' }).toLocal()
+  if (!dt.isValid) {
+    return fallback
+  }
+
+  const weekday = WEEKDAY_LABELS[dt.weekday - 1] || ''
+  return `${weekday} ${dt.toFormat('MM-dd HH:mm')}`.trim()
 }
 
 export function formatDuration(minutes) {

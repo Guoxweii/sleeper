@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
-import { currentIsoWeek, formatDuration } from '../lib/time'
+import { currentIsoWeek, formatDateTimeWithWeekday, formatDuration, formatTypeLabel } from '../lib/time'
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
@@ -62,6 +62,7 @@ const typeRows = computed(() => {
 })
 
 const review = computed(() => analysis.value?.review || null)
+const sourceRecords = computed(() => analysis.value?.sourceRecords || [])
 
 const reviewBasisText = computed(() => {
   const meta = review.value?.meta
@@ -141,6 +142,32 @@ onMounted(loadPage)
     <section v-if="loading" class="glass-card p-8 text-center text-sm text-cyan-900/75">加载中...</section>
 
     <template v-else-if="analysis">
+      <section class="glass-card p-4">
+        <details>
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-2 text-sm text-cyan-900">
+            <span class="title-font text-lg text-cyan-950">睡眠数据来源</span>
+            <span class="text-xs text-cyan-700/80">默认折叠，点击展开</span>
+          </summary>
+          <div class="mt-3">
+            <p class="text-xs text-cyan-900/65">纳入本周分析的睡眠记录（{{ sourceRecords.length }} 条）</p>
+
+            <div v-if="sourceRecords.length" class="mt-2 max-h-64 space-y-2 overflow-auto pr-1">
+              <article
+                v-for="(item, index) in sourceRecords"
+                :key="`${item.startAt}-${item.endAt}-${item.type}-${index}`"
+                class="rounded-xl border border-cyan-100 bg-white/75 px-3 py-2"
+              >
+                <p class="text-xs font-semibold text-cyan-900">{{ formatTypeLabel(item.type) }}</p>
+                <p class="mt-1 text-xs leading-5 text-cyan-900/80">入睡：{{ formatDateTimeWithWeekday(item.startAt) }}</p>
+                <p class="text-xs leading-5 text-cyan-900/80">苏醒：{{ formatDateTimeWithWeekday(item.endAt) }}</p>
+              </article>
+            </div>
+
+            <p v-else class="mt-2 text-xs text-cyan-900/70">当前统计范围内没有可用睡眠记录。</p>
+          </div>
+        </details>
+      </section>
+
       <section class="glass-card p-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <h2 class="title-font text-xl text-cyan-950">本周评测</h2>

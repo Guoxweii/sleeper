@@ -557,12 +557,22 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
       )
       .all(boardId, weekRange.startUtc, weekRange.endUtc)
 
-    const analysis = buildWeeklyAnalysis(rows, weekRange, timezone, {
+    const baseAnalysis = buildWeeklyAnalysis(rows, weekRange, timezone, {
       boardBirthDate: board.birth_date || null
     })
+
+    const sourceRecords = rows.map((row) => ({
+      type: row.type,
+      startAt: row.start_at,
+      endAt: row.end_at
+    }))
+
     reply.send({
       board: boardDto(board),
-      analysis
+      analysis: {
+        ...baseAnalysis,
+        sourceRecords
+      }
     })
   } catch (error) {
     reply.code(400).send({ message: error.message || '分析参数无效' })
@@ -595,12 +605,22 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
       )
       .all(boardId, monthRange.startUtc, monthRange.endUtc)
 
-    const analysis = buildMonthlyAnalysis(rows, monthRange, timezone, {
+    const baseAnalysis = buildMonthlyAnalysis(rows, monthRange, timezone, {
       boardBirthDate: board.birth_date || null
     })
+
+    const sourceRecords = rows.map((row) => ({
+      type: row.type,
+      startAt: row.start_at,
+      endAt: row.end_at
+    }))
+
     reply.send({
       board: boardDto(board),
-      analysis
+      analysis: {
+        ...baseAnalysis,
+        sourceRecords
+      }
     })
   } catch (error) {
     reply.code(400).send({ message: error.message || '分析参数无效' })
