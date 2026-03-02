@@ -22,6 +22,7 @@ function boardDto(row) {
     id: row.id,
     name: row.name,
     description: row.description || '',
+    birthDate: row.birth_date || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
@@ -59,6 +60,28 @@ function parseOptionalTimeInput(value, fieldName) {
   }
 
   return parseTimeInput(value, fieldName)
+}
+
+function parseBirthDateInput(value) {
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+
+  const raw = String(value).trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new Error('birthDate 格式必须为 YYYY-MM-DD')
+  }
+
+  const dt = DateTime.fromISO(raw, { zone: 'utc' })
+  if (!dt.isValid || dt.toISODate() !== raw) {
+    throw new Error('birthDate 日期无效')
+  }
+
+  if (dt > DateTime.utc().startOf('day')) {
+    throw new Error('birthDate 不能晚于今天')
+  }
+
+  return raw
 }
 
 function normalizeType(type) {
@@ -262,6 +285,14 @@ app.get('/api/boards/:id', { preHandler: requireAuth }, async (request, reply) =
 app.post('/api/boards', { preHandler: requireAuth }, async (request, reply) => {
   const name = String(request.body?.name || '').trim()
   const description = String(request.body?.description || '').trim()
+  let birthDate
+
+  try {
+    birthDate = parseBirthDateInput(request.body?.birthDate)
+  } catch (error) {
+    reply.code(400).send({ message: error.message || 'birthDate 参数错误' })
+    return
+  }
 
   if (!name) {
     reply.code(400).send({ message: 'Board 名称不能为空' })
@@ -270,8 +301,8 @@ app.post('/api/boards', { preHandler: requireAuth }, async (request, reply) => {
 
   const now = nowUtcIso()
   const result = db
-    .prepare('INSERT INTO boards (name, description, created_at, updated_at) VALUES (?, ?, ?, ?)')
-    .run(name, description, now, now)
+    .prepare('INSERT INTO boards (name, description, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .run(name, description, birthDate, now, now)
 
   const board = findBoard(Number(result.lastInsertRowid))
   reply.code(201).send({ board: boardDto(board) })
@@ -289,6 +320,16 @@ app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply)
   const name = request.body?.name === undefined ? board.name : String(request.body.name).trim()
   const description =
     request.body?.description === undefined ? board.description || '' : String(request.body.description).trim()
+  let birthDate = board.birth_date || null
+
+  if (request.body?.birthDate !== undefined) {
+    try {
+      birthDate = parseBirthDateInput(request.body?.birthDate)
+    } catch (error) {
+      reply.code(400).send({ message: error.message || 'birthDate 参数错误' })
+      return
+    }
+  }
 
   if (!name) {
     reply.code(400).send({ message: 'Board 名称不能为空' })
@@ -296,9 +337,10 @@ app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply)
   }
 
   const now = nowUtcIso()
-  db.prepare('UPDATE boards SET name = ?, description = ?, updated_at = ? WHERE id = ?').run(
+  db.prepare('UPDATE boards SET name = ?, description = ?, birth_date = ?, updated_at = ? WHERE id = ?').run(
     name,
     description,
+    birthDate,
     now,
     boardId
   )
@@ -330,25 +372,60 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
   }
 
   const type = request.query?.type
-  const limit = Math.min(Math.max(Number(request.query?.limit || 120), 1), 500)
+  const rawPage = Number(request.query?.page || 1)
+  const rawPageSize = Number(request.query?.pageSize ?? request.query?.limit ?? 50)
+
+  if (!Number.isFinite(rawPage) || rawPage < 1) {
+    reply.code(400).send({ message: 'page 参数无效' })
+    return
+  }
+
+  if (!Number.isFinite(rawPageSize) || rawPageSize < 1) {
+    reply.code(400).send({ message: 'pageSize 参数无效' })
+    return
+  }
+
+  const page = Math.floor(rawPage)
+  const pageSize = Math.min(Math.floor(rawPageSize), 200)
   const params = [boardId]
-  let sql = 'SELECT * FROM sleep_sessions WHERE board_id = ?'
+  let whereClause = 'WHERE board_id = ?'
 
   if (type && type !== 'all') {
     if (!SLEEP_TYPES.has(type)) {
       reply.code(400).send({ message: '筛选类型无效' })
       return
     }
-    sql += ' AND type = ?'
+    whereClause += ' AND type = ?'
     params.push(type)
   }
 
-  sql += ' ORDER BY start_at DESC LIMIT ?'
-  params.push(limit)
+  const countRow = db.prepare(`SELECT COUNT(*) AS total FROM sleep_sessions ${whereClause}`).get(...params)
+  const total = Number(countRow?.total || 0)
+  const totalPages = total === 0 ? 1 : Math.ceil(total / pageSize)
+  const currentPage = Math.min(page, totalPages)
+  const offset = (currentPage - 1) * pageSize
 
-  const rows = db.prepare(sql).all(...params)
+  const rows = db
+    .prepare(
+      `
+      SELECT * FROM sleep_sessions
+      ${whereClause}
+      ORDER BY start_at DESC, id DESC
+      LIMIT ? OFFSET ?
+    `
+    )
+    .all(...params, pageSize, offset)
+
   reply.send({
-    sessions: rows.map(sessionDto)
+    sessions: rows.map(sessionDto),
+    pagination: {
+      page: currentPage,
+      pageSize,
+      total,
+      totalPages,
+      hasPrev: currentPage > 1,
+      hasNext: currentPage < totalPages
+    }
   })
 })
 
@@ -480,7 +557,9 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
       )
       .all(boardId, weekRange.startUtc, weekRange.endUtc)
 
-    const analysis = buildWeeklyAnalysis(rows, weekRange, timezone)
+    const analysis = buildWeeklyAnalysis(rows, weekRange, timezone, {
+      boardBirthDate: board.birth_date || null
+    })
     reply.send({
       board: boardDto(board),
       analysis
@@ -516,7 +595,9 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
       )
       .all(boardId, monthRange.startUtc, monthRange.endUtc)
 
-    const analysis = buildMonthlyAnalysis(rows, monthRange, timezone)
+    const analysis = buildMonthlyAnalysis(rows, monthRange, timezone, {
+      boardBirthDate: board.birth_date || null
+    })
     reply.send({
       board: boardDto(board),
       analysis

@@ -17,12 +17,34 @@ const errorMessage = ref('')
 
 const form = reactive({
   name: '',
-  description: ''
+  description: '',
+  birthDate: ''
 })
 
 function formatUpdated(value) {
   const dt = DateTime.fromISO(value, { zone: 'utc' }).toLocal()
   return dt.isValid ? dt.toFormat('MM-dd HH:mm') : '-'
+}
+
+function formatAgeFromBirthDate(value) {
+  if (!value) {
+    return ''
+  }
+
+  const birth = DateTime.fromISO(value).startOf('day')
+  const today = DateTime.local().startOf('day')
+  if (!birth.isValid || birth > today) {
+    return ''
+  }
+
+  const totalMonths = Math.floor(today.diff(birth, 'months').months)
+  const years = Math.floor(totalMonths / 12)
+  const months = totalMonths % 12
+
+  if (years <= 0) {
+    return `${months}个月`
+  }
+  return months > 0 ? `${years}岁${months}个月` : `${years}岁`
 }
 
 async function loadBoards() {
@@ -41,6 +63,7 @@ async function loadBoards() {
 function resetForm() {
   form.name = ''
   form.description = ''
+  form.birthDate = ''
   editingBoardId.value = null
 }
 
@@ -54,6 +77,7 @@ function openEdit(board) {
   editingBoardId.value = board.id
   form.name = board.name
   form.description = board.description || ''
+  form.birthDate = board.birthDate || ''
 }
 
 function closeForm() {
@@ -68,7 +92,8 @@ async function saveBoard() {
   try {
     const payload = {
       name: form.name,
-      description: form.description
+      description: form.description,
+      birthDate: form.birthDate || null
     }
 
     if (editingBoardId.value) {
@@ -143,6 +168,10 @@ onMounted(loadBoards)
             <span class="field-label">描述（可选）</span>
             <input v-model="form.description" class="input-field" placeholder="例如：夜间与午睡记录" />
           </label>
+          <label>
+            <span class="field-label">出生日期（可选）</span>
+            <input v-model="form.birthDate" class="input-field" type="date" />
+          </label>
         </div>
         <div class="mt-4 flex flex-wrap gap-2">
           <button :disabled="saving" class="btn-primary px-4 py-2" @click="saveBoard">
@@ -169,6 +198,12 @@ onMounted(loadBoards)
       <article v-for="board in boards" :key="board.id" class="glass-card animate-enter p-4">
         <h3 class="title-font text-xl text-cyan-950">{{ board.name }}</h3>
         <p class="mt-2 min-h-10 text-sm text-cyan-900/70">{{ board.description || '暂无描述' }}</p>
+        <p class="mt-2 text-xs text-cyan-900/60">
+          出生日期：{{ board.birthDate || '未设置' }}
+          <span v-if="board.birthDate && formatAgeFromBirthDate(board.birthDate)">
+            （{{ formatAgeFromBirthDate(board.birthDate) }}）
+          </span>
+        </p>
         <p class="mt-3 text-xs text-cyan-900/55">最近更新：{{ formatUpdated(board.updatedAt) }}</p>
 
         <div class="mt-4 grid grid-cols-2 gap-2">

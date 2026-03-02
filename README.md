@@ -51,32 +51,39 @@ npm run start
 
 ## Docker 部署
 
-在服务器项目目录执行一条命令拉取并发布：
+在本地开发机执行一条命令（使用 `scp -O` 同步）并发布：
 
 ```bash
-npm run publish
+npm run deploy
 ```
+
+脚本会自动完成：
+
+- 打包当前项目并通过 `scp -O` 上传到服务器
+- 解压到 `DEPLOY_PATH`（默认 `/volume1/docker/sleeper`）
+- 自动创建 `DEPLOY_PATH/data` 目录用于数据库持久化
+- 在服务器执行容器重建发布（`docker compose up -d --build --remove-orphans`）
 
 可选参数：
 
 ```bash
-# 指定分支（默认当前分支）
-DEPLOY_BRANCH=main npm run publish
+# 指定服务器地址（默认 root@local-nas）
+DEPLOY_HOST=root@local-nas npm run deploy
 
-# 指定远程（默认 origin）
-DEPLOY_REMOTE=origin npm run publish
+# 指定服务器项目目录（默认 /volume1/docker/sleeper）
+DEPLOY_PATH=/volume1/docker/sleeper npm run deploy
 
-# 快速发布：只拉代码并重启容器，不重建镜像
-npm run publish:quick
+# 指定 SSH 端口（默认使用 22）
+DEPLOY_PORT=22 npm run deploy
+
+# 快速发布：同步代码并重启容器，不重建镜像
+npm run deploy:quick
+
+# 等价于快速发布
+DEPLOY_WITH_BUILD=0 npm run deploy
 ```
 
-仅在服务器本机重建并发布：
-
-```bash
-npm run release
-```
-
-等价命令：
+仅在服务器项目目录手动重建并发布：
 
 ```bash
 docker compose up -d --build --remove-orphans

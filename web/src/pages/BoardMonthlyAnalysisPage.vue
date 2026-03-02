@@ -61,6 +61,46 @@ const typeRows = computed(() => {
   return [source.night, source.nap, source.fragmented].filter(Boolean)
 })
 
+const review = computed(() => analysis.value?.review || null)
+
+const reviewBasisText = computed(() => {
+  const meta = review.value?.meta
+  if (!meta) {
+    return ''
+  }
+
+  const ageText = meta.age
+    ? `${meta.age.years}岁${meta.age.months > 0 ? `${meta.age.months}个月` : ''}`
+    : '未设置生日'
+  const basis = meta.source === 'birth_date' ? `${ageText}（${meta.profileLabel}）` : `未设置生日，按${meta.profileLabel}`
+
+  return `评测标准：${basis}；建议日睡眠 ${meta.recommendedDurationHours} 小时；建议入睡/醒来 ${meta.recommendedSleepTime} / ${meta.recommendedWakeTime}。`
+})
+
+const reviewStatusLabel = {
+  excellent: '优秀',
+  good: '良好',
+  attention: '关注',
+  poor: '待改善',
+  insufficient: '数据不足'
+}
+
+function reviewStatusClass(status) {
+  if (status === 'excellent') {
+    return 'bg-emerald-100 text-emerald-700'
+  }
+  if (status === 'good') {
+    return 'bg-cyan-100 text-cyan-700'
+  }
+  if (status === 'attention') {
+    return 'bg-amber-100 text-amber-700'
+  }
+  if (status === 'poor') {
+    return 'bg-rose-100 text-rose-700'
+  }
+  return 'bg-slate-100 text-slate-600'
+}
+
 const dailyColumnsStyle = computed(() => {
   const count = analysis.value?.daily?.length || 1
   return {
@@ -107,6 +147,46 @@ onMounted(loadPage)
     <section v-if="loading" class="glass-card p-8 text-center text-sm text-cyan-900/75">加载中...</section>
 
     <template v-else-if="analysis">
+      <section class="glass-card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="title-font text-xl text-cyan-950">本月评测</h2>
+          <p
+            v-if="review"
+            class="inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-800"
+          >
+            {{ review.level }} · {{ review.score }} 分
+          </p>
+        </div>
+        <p class="mt-2 text-sm leading-6 text-cyan-900/80">{{ review?.summary || '暂无评测结果。' }}</p>
+        <p v-if="reviewBasisText" class="mt-1 text-xs leading-5 text-cyan-900/65">{{ reviewBasisText }}</p>
+
+        <div v-if="review?.dimensions?.length" class="mt-4 grid gap-3 md:grid-cols-2">
+          <article
+            v-for="item in review.dimensions"
+            :key="item.key"
+            class="rounded-2xl border border-cyan-100 bg-white/80 p-3"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-cyan-900">{{ item.label }}</p>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-cyan-800">{{ item.score }} 分</span>
+                <span :class="['rounded-full px-2 py-0.5 text-[11px] font-semibold', reviewStatusClass(item.status)]">
+                  {{ reviewStatusLabel[item.status] || '评估中' }}
+                </span>
+              </div>
+            </div>
+            <p class="mt-2 text-xs leading-5 text-cyan-900/75">{{ item.message }}</p>
+          </article>
+        </div>
+
+        <div v-if="review?.suggestions?.length" class="mt-4 rounded-2xl bg-cyan-50 p-3">
+          <p class="text-xs font-semibold tracking-wide text-cyan-800">调整建议</p>
+          <ul class="mt-2 space-y-1 text-xs leading-5 text-cyan-900/80">
+            <li v-for="(item, index) in review.suggestions" :key="`${index}-${item}`">{{ index + 1 }}. {{ item }}</li>
+          </ul>
+        </div>
+      </section>
+
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article class="glass-card p-4">
           <p class="text-xs text-cyan-900/60">月总睡眠</p>

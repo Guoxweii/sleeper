@@ -46,6 +46,7 @@ export function migrate(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
+      birth_date TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -68,6 +69,21 @@ export function migrate(db) {
   `)
 
   migrateSleepSessionsAllowNullEndAt(db)
+  migrateBoardsAddBirthDate(db)
+}
+
+function migrateBoardsAddBirthDate(db) {
+  const columns = db.prepare('PRAGMA table_info(boards)').all()
+  if (!columns.length) {
+    return
+  }
+
+  const hasBirthDate = columns.some((column) => column.name === 'birth_date')
+  if (hasBirthDate) {
+    return
+  }
+
+  db.exec('ALTER TABLE boards ADD COLUMN birth_date TEXT')
 }
 
 function migrateSleepSessionsAllowNullEndAt(db) {
@@ -139,11 +155,11 @@ export function seedDefaultBoards(db) {
   const now = nowUtcIso()
   const names = ['胖虎的睡眠记录', '爸爸的睡眠记录']
   const stmt = db.prepare(
-    'INSERT INTO boards (name, description, created_at, updated_at) VALUES (?, ?, ?, ?)'
+    'INSERT INTO boards (name, description, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
   )
 
   for (const name of names) {
-    stmt.run(name, '', now, now)
+    stmt.run(name, '', null, now, now)
   }
 
   return names

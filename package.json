@@ -14,11 +14,8 @@
     "db:init": "npm run db:init --workspace server",
     "build": "npm run build --workspace web",
     "start": "npm run start --workspace server",
-    "release": "docker compose up -d --build --remove-orphans",
-    "publish": "bash ./scripts/deploy-git-pull.sh",
-    "publish:quick": "DEPLOY_WITH_BUILD=0 bash ./scripts/deploy-git-pull.sh",
-    "deploy": "bash ./scripts/deploy-rsync.sh",
-    "deploy:quick": "DEPLOY_WITH_BUILD=0 bash ./scripts/deploy-rsync.sh"
+    "deploy": "bash ./scripts/deploy-scp.sh",
+    "deploy:quick": "DEPLOY_WITH_BUILD=0 bash ./scripts/deploy-scp.sh"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

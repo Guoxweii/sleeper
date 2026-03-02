@@ -19,11 +19,23 @@ const board = ref(null)
 const sessions = ref([])
 const loading = ref(true)
 const saving = ref(false)
+const sessionsLoading = ref(false)
 const errorMessage = ref('')
 
 const filterType = ref('all')
+const page = ref(1)
+const pageSize = ref(50)
 const formVisible = ref(false)
 const editingSessionId = ref(null)
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+  total: 0,
+  totalPages: 1,
+  hasPrev: false,
+  hasNext: false
+})
 
 const form = reactive({
   type: 'night',
@@ -36,6 +48,17 @@ function typeBadgeClass(type) {
   if (type === 'night') return 'bg-cyan-600 text-white'
   if (type === 'nap') return 'bg-emerald-500 text-white'
   return 'bg-amber-400 text-amber-900'
+}
+
+function isOngoing(session) {
+  return !session.endAt
+}
+
+function sessionCardClass(session) {
+  if (isOngoing(session)) {
+    return 'border-2 border-amber-300 bg-amber-50/75'
+  }
+  return ''
 }
 
 function setDefaultForm() {
@@ -65,9 +88,32 @@ async function loadBoard() {
 }
 
 async function loadSessions() {
-  const query = filterType.value === 'all' ? '' : `?type=${filterType.value}`
-  const response = await api.get(`/api/boards/${boardId.value}/sessions${query}`)
-  sessions.value = response.sessions || []
+  sessionsLoading.value = true
+  try {
+    const query = new URLSearchParams()
+    if (filterType.value !== 'all') {
+      query.set('type', filterType.value)
+    }
+    query.set('page', String(page.value))
+    query.set('pageSize', String(pageSize.value))
+
+    const queryString = query.toString()
+    const response = await api.get(`/api/boards/${boardId.value}/sessions?${queryString}`)
+    sessions.value = response.sessions || []
+
+    const meta = response.pagination || {}
+    pagination.page = meta.page || page.value
+    pagination.pageSize = meta.pageSize || pageSize.value
+    pagination.total = meta.total || 0
+    pagination.totalPages = meta.totalPages || 1
+    pagination.hasPrev = Boolean(meta.hasPrev)
+    pagination.hasNext = Boolean(meta.hasNext)
+
+    page.value = pagination.page
+    pageSize.value = pagination.pageSize
+  } finally {
+    sessionsLoading.value = false
+  }
 }
 
 async function loadPage() {
@@ -143,8 +189,34 @@ async function deleteSession(session) {
   }
 }
 
-watch(filterType, loadSessions)
-watch(boardId, loadPage)
+async function changePage(nextPage) {
+  if (nextPage < 1 || nextPage === page.value) {
+    return
+  }
+
+  page.value = nextPage
+  errorMessage.value = ''
+  try {
+    await loadSessions()
+  } catch (error) {
+    errorMessage.value = error.message || '加载记录失败'
+  }
+}
+
+watch(filterType, async () => {
+  page.value = 1
+  errorMessage.value = ''
+  try {
+    await loadSessions()
+  } catch (error) {
+    errorMessage.value = error.message || '加载记录失败'
+  }
+})
+
+watch(boardId, async () => {
+  page.value = 1
+  await loadPage()
+})
 
 onMounted(() => {
   setDefaultForm()
@@ -235,24 +307,42 @@ onMounted(() => {
     <section v-if="loading" class="glass-card p-8 text-center text-sm text-cyan-900/75">加载中...</section>
 
     <section
-      v-else-if="sessions.length === 0"
+      v-else-if="!sessionsLoading && sessions.length === 0"
       class="glass-card p-8 text-center text-sm text-cyan-900/75"
     >
       当前筛选条件下还没有记录。
     </section>
 
     <section v-else class="grid gap-3">
-      <article v-for="session in sessions" :key="session.id" class="glass-card animate-enter p-4">
+      <section v-if="sessionsLoading" class="glass-card p-6 text-center text-sm text-cyan-900/75">
+        正在加载记录...
+      </section>
+
+      <article
+        v-for="session in sessions"
+        :key="session.id"
+        :class="['glass-card animate-enter p-4', sessionCardClass(session)]"
+      >
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <span
-            :class="[
-              'inline-flex min-h-[32px] items-center rounded-full px-3 py-1 text-xs font-semibold',
-              typeBadgeClass(session.type)
-            ]"
-          >
-            {{ formatTypeLabel(session.type) }}
+          <div class="flex flex-wrap items-center gap-2">
+            <span
+              :class="[
+                'inline-flex min-h-[32px] items-center rounded-full px-3 py-1 text-xs font-semibold',
+                typeBadgeClass(session.type)
+              ]"
+            >
+              {{ formatTypeLabel(session.type) }}
+            </span>
+            <span
+              v-if="isOngoing(session)"
+              class="inline-flex min-h-[30px] items-center rounded-full bg-amber-200 px-3 py-1 text-xs font-semibold text-amber-800"
+            >
+              未结束
+            </span>
+          </div>
+          <span :class="['title-font text-sm', isOngoing(session) ? 'text-amber-800' : 'text-cyan-900']">
+            {{ sessionDurationLabel(session) }}
           </span>
-          <span class="title-font text-sm text-cyan-900">{{ sessionDurationLabel(session) }}</span>
         </div>
 
         <div class="mt-3 grid gap-2 text-sm text-cyan-900/80 sm:grid-cols-2">
@@ -269,6 +359,30 @@ onMounted(() => {
           <button class="btn-danger" @click="deleteSession(session)">删除</button>
         </div>
       </article>
+
+      <section class="glass-card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 text-sm text-cyan-900/80">
+          <p>
+            第 {{ pagination.page }} / {{ pagination.totalPages }} 页，共 {{ pagination.total }} 条
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              :disabled="!pagination.hasPrev || sessionsLoading"
+              class="btn-secondary px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="changePage(pagination.page - 1)"
+            >
+              上一页
+            </button>
+            <button
+              :disabled="!pagination.hasNext || sessionsLoading"
+              class="btn-secondary px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="changePage(pagination.page + 1)"
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      </section>
     </section>
   </div>
 </template>
