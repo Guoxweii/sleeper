@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    container_name: sleeper-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/sleep.db
+      - NODE_ENV=production
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.sleeper.rule=HostRegexp(`{catch_all:.*}`)'
+      - 'traefik.http.routers.sleeper.tls=true'
+      - 'traefik.http.routers.sleeper.entrypoints=sleeper'
+      - 'traefik.http.routers.sleeper.service=sleeper'
+      - 'traefik.http.services.sleeper.loadbalancer.server.port=3000'
+    volumes:
+      - ./data:/app/data
+    networks:
+      - default
+      - traefik
+
+networks:
+  traefik:
+    external: true

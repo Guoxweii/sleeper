@@ -1,0 +1,26 @@
+{
+  "name": "sleeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Family sleep tracker with Vue and Fastify",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace web\"",
+    "dev:web": "npm run dev --workspace web",
+    "dev:api": "npm run dev --workspace server",
+    "db:init": "npm run db:init --workspace server",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace server",
+    "release": "docker compose up -d --build --remove-orphans",
+    "publish": "bash ./scripts/deploy-git-pull.sh",
+    "publish:quick": "DEPLOY_WITH_BUILD=0 bash ./scripts/deploy-git-pull.sh",
+    "deploy": "bash ./scripts/deploy-rsync.sh",
+    "deploy:quick": "DEPLOY_WITH_BUILD=0 bash ./scripts/deploy-rsync.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

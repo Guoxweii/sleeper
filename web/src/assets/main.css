@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: 'Noto Sans SC', sans-serif;
+  color: #164e63;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(34, 211, 238, 0.35), transparent 42%),
+    radial-gradient(circle at 88% 8%, rgba(5, 150, 105, 0.22), transparent 34%),
+    linear-gradient(175deg, #ecfeff 0%, #f8fafc 45%, #f0fdfa 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer components {
+  .screen {
+    @apply mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-24 pt-6 sm:px-6;
+  }
+
+  .glass-card {
+    @apply rounded-3xl border border-white/70 bg-white/80 shadow-glow backdrop-blur-xl;
+  }
+
+  .title-font {
+    font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+  }
+
+  .btn-primary {
+    @apply inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-cyan-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500;
+  }
+
+  .btn-secondary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-cyan-200 bg-white/70 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500;
+  }
+
+  .btn-danger {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500;
+  }
+
+  .btn-primary-compact {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500;
+  }
+
+  .btn-secondary-compact {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-cyan-200 bg-white/70 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500;
+  }
+
+  .btn-danger-compact {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500;
+  }
+
+  .field-label {
+    @apply mb-2 block text-xs font-semibold tracking-wide text-cyan-900/80;
+  }
+
+  .input-field {
+    @apply min-h-[44px] w-full rounded-xl border border-cyan-100 bg-white px-3 py-2 text-sm text-cyan-900 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-200;
+  }
+
+  .animate-enter {
+    animation: fade-up 240ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

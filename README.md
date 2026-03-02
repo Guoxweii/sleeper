@@ -51,17 +51,46 @@ npm run start
 
 ## Docker 部署
 
+在服务器项目目录执行一条命令拉取并发布：
+
 ```bash
-docker compose up -d --build
+npm run publish
 ```
+
+可选参数：
+
+```bash
+# 指定分支（默认当前分支）
+DEPLOY_BRANCH=main npm run publish
+
+# 指定远程（默认 origin）
+DEPLOY_REMOTE=origin npm run publish
+
+# 快速发布：只拉代码并重启容器，不重建镜像
+npm run publish:quick
+```
+
+仅在服务器本机重建并发布：
+
+```bash
+npm run release
+```
+
+等价命令：
+
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+当前不做宿主机 `ports` 映射（不会暴露 `22` 或 `3000`），通过 Traefik 的 `sleeper` 入口转发到容器 `3000` 端口。
 
 生产环境建议：
 
 - 修改 `.env` 中 `APP_SECRET` 和 `ADMIN_PASSWORD`
 - 挂载 `./data` 持久化 `sleep.db`
 - 增加数据库文件定期备份
+- 确保 Docker 已存在外部网络 `traefik`（示例：`docker network create traefik`）
 
 ## 文档
 
 - 项目方案文档：`docs/project-plan.md`
-# sleeper
