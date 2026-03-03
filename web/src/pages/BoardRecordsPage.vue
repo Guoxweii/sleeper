@@ -55,10 +55,13 @@ function isOngoing(session) {
 }
 
 function sessionCardClass(session) {
+  const classes = []
+
   if (isOngoing(session)) {
-    return 'border-2 border-amber-300 bg-amber-50/75'
+    classes.push('border-2 border-amber-300 bg-amber-50/75')
   }
-  return ''
+
+  return classes.join(' ')
 }
 
 function setDefaultForm() {
@@ -144,7 +147,11 @@ function openEdit(session) {
   form.note = session.note || ''
 }
 
-function closeForm() {
+function closeForm(force = false) {
+  if (saving.value && !force) {
+    return
+  }
+
   formVisible.value = false
   editingSessionId.value = null
 }
@@ -167,7 +174,7 @@ async function submitForm() {
       await api.post(`/api/boards/${boardId.value}/sessions`, payload)
     }
 
-    closeForm()
+    closeForm(true)
     await loadSessions()
   } catch (error) {
     errorMessage.value = error.message || '保存记录失败'
@@ -263,41 +270,7 @@ onMounted(() => {
         <button class="btn-primary px-4 py-2" @click="openCreate">新增记录</button>
       </div>
 
-      <div v-if="formVisible" class="mt-4 rounded-2xl border border-cyan-100 bg-white/80 p-4">
-        <h3 class="mb-3 text-sm font-semibold text-cyan-900">
-          {{ editingSessionId ? '编辑记录' : '新增记录' }}
-        </h3>
-
-        <div class="grid gap-3 sm:grid-cols-2">
-          <label>
-            <span class="field-label">类型</span>
-            <select v-model="form.type" class="input-field">
-              <option v-for="option in SESSION_TYPE_OPTIONS" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span class="field-label">备注（可选）</span>
-            <input v-model="form.note" class="input-field" placeholder="例如：半夜醒来后再睡" type="text" />
-          </label>
-          <label>
-            <span class="field-label">入睡时间</span>
-            <input v-model="form.startAt" class="input-field" required type="datetime-local" />
-          </label>
-          <label>
-            <span class="field-label">苏醒时间（可选）</span>
-            <input v-model="form.endAt" class="input-field" type="datetime-local" />
-          </label>
-        </div>
-
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button :disabled="saving" class="btn-primary px-4 py-2" @click="submitForm">
-            {{ saving ? '保存中...' : '保存记录' }}
-          </button>
-          <button class="btn-secondary" @click="closeForm">取消</button>
-        </div>
-      </div>
+      <p class="mt-3 text-xs text-cyan-900/70">点击记录右下角“编辑”会弹出窗口。</p>
     </section>
 
     <p v-if="errorMessage" class="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -384,5 +357,56 @@ onMounted(() => {
         </div>
       </section>
     </section>
+
+    <div v-if="formVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div class="absolute inset-0 bg-cyan-950/45 backdrop-blur-sm" @click="closeForm" />
+
+      <section class="relative z-10 w-full max-w-2xl rounded-3xl border border-cyan-200 bg-white p-5 shadow-2xl sm:p-6">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="title-font text-2xl text-cyan-950">{{ editingSessionId ? '编辑记录' : '新增记录' }}</h3>
+            <p class="mt-1 text-xs text-cyan-900/70">修改完成后点击保存即可。</p>
+          </div>
+
+          <button
+            :disabled="saving"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyan-100 text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+            @click="closeForm"
+          >
+            X
+          </button>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label>
+            <span class="field-label">类型</span>
+            <select v-model="form.type" class="input-field">
+              <option v-for="option in SESSION_TYPE_OPTIONS" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">备注（可选）</span>
+            <input v-model="form.note" class="input-field" placeholder="例如：半夜醒来后再睡" type="text" />
+          </label>
+          <label>
+            <span class="field-label">入睡时间</span>
+            <input v-model="form.startAt" class="input-field" required type="datetime-local" />
+          </label>
+          <label>
+            <span class="field-label">苏醒时间（可选）</span>
+            <input v-model="form.endAt" class="input-field" type="datetime-local" />
+          </label>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button :disabled="saving" class="btn-primary px-4 py-2" @click="submitForm">
+            {{ saving ? '保存中...' : '保存记录' }}
+          </button>
+          <button :disabled="saving" class="btn-secondary" @click="closeForm">取消</button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
