@@ -207,7 +207,10 @@ onMounted(loadPage)
 
             <div
               v-if="sourceRecords.length"
-              :class="['mt-2 space-y-2 overflow-auto pr-1', sourceRecords.length > 3 ? 'max-h-[15rem]' : 'max-h-none']"
+              :class="[
+                'mt-2 space-y-2 overflow-y-auto pr-1 pb-2',
+                sourceRecords.length > 3 ? 'max-h-[22rem] md:max-h-[24rem]' : 'max-h-none'
+              ]"
             >
               <article
                 v-for="(item, index) in sourceRecords"
