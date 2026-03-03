@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
+import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
 import { currentIsoMonth, formatDateTimeWithWeekday, formatDuration, formatTypeLabel } from '../lib/time'
 
 const route = useRoute()
@@ -14,6 +15,8 @@ const analysis = ref(null)
 const month = ref(currentIsoMonth())
 const loading = ref(true)
 const errorMessage = ref('')
+const copyMessage = ref('')
+const copyingPrompt = ref(false)
 
 async function loadBoard() {
   const response = await api.get(`/api/boards/${boardId.value}`)
@@ -30,6 +33,7 @@ async function loadAnalysis() {
 async function loadPage() {
   loading.value = true
   errorMessage.value = ''
+  copyMessage.value = ''
   try {
     await Promise.all([loadBoard(), loadAnalysis()])
   } catch (error) {
@@ -42,6 +46,7 @@ async function loadPage() {
 async function reloadAnalysisOnly() {
   loading.value = true
   errorMessage.value = ''
+  copyMessage.value = ''
   try {
     await loadAnalysis()
   } catch (error) {
@@ -63,6 +68,20 @@ const typeRows = computed(() => {
 
 const review = computed(() => analysis.value?.review || null)
 const sourceRecords = computed(() => analysis.value?.sourceRecords || [])
+
+const aiConsultPrompt = computed(() => {
+  if (!analysis.value) {
+    return ''
+  }
+
+  return buildAiConsultPrompt({
+    scope: 'monthly',
+    boardName: board.value?.name || `#${boardId.value}`,
+    boardBirthDate: board.value?.birthDate || null,
+    analysis: analysis.value,
+    timezone
+  })
+})
 
 const reviewBasisText = computed(() => {
   const meta = review.value?.meta
@@ -102,6 +121,24 @@ function reviewStatusClass(status) {
   return 'bg-slate-100 text-slate-600'
 }
 
+async function copyPromptForAi() {
+  if (!aiConsultPrompt.value || copyingPrompt.value) {
+    return
+  }
+
+  copyingPrompt.value = true
+  copyMessage.value = ''
+
+  try {
+    await copyTextToClipboard(aiConsultPrompt.value)
+    copyMessage.value = '已复制 AI 查询内容，可直接粘贴到其他 AI。'
+  } catch (error) {
+    copyMessage.value = '复制失败，请手动复制。'
+  } finally {
+    copyingPrompt.value = false
+  }
+}
+
 const dailyColumnsStyle = computed(() => {
   const count = analysis.value?.daily?.length || 1
   return {
@@ -133,12 +170,23 @@ onMounted(loadPage)
 
     <section class="glass-card p-4">
       <div class="flex flex-wrap items-end gap-3">
-        <label>
-          <span class="field-label">分析月</span>
-          <input v-model="month" class="input-field" type="month" />
-        </label>
-        <div class="rounded-xl bg-cyan-50 px-3 py-2 text-xs text-cyan-800">时区：{{ timezone }}</div>
+        <div class="flex flex-wrap items-end gap-3">
+          <label>
+            <span class="field-label">分析月</span>
+            <input v-model="month" class="input-field" type="month" />
+          </label>
+          <div class="rounded-xl bg-cyan-50 px-3 py-2 text-xs text-cyan-800">时区：{{ timezone }}</div>
+        </div>
+
+        <button
+          :disabled="!analysis || copyingPrompt"
+          class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:w-auto"
+          @click="copyPromptForAi"
+        >
+          {{ copyingPrompt ? '复制中...' : '复制 AI 查询内容' }}
+        </button>
       </div>
+      <p v-if="copyMessage" class="mt-2 text-xs text-cyan-800">{{ copyMessage }}</p>
     </section>
 
     <p v-if="errorMessage" class="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
