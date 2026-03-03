@@ -199,7 +199,10 @@ onMounted(loadPage)
           <div class="mt-3">
             <p class="text-xs text-cyan-900/65">纳入本周分析的睡眠记录（{{ sourceRecords.length }} 条）</p>
 
-            <div v-if="sourceRecords.length" class="mt-2 max-h-64 space-y-2 overflow-auto pr-1">
+            <div
+              v-if="sourceRecords.length"
+              :class="['mt-2 space-y-2 overflow-auto pr-1', sourceRecords.length > 3 ? 'max-h-[15rem]' : 'max-h-none']"
+            >
               <article
                 v-for="(item, index) in sourceRecords"
                 :key="`${item.startAt}-${item.endAt}-${item.type}-${index}`"
