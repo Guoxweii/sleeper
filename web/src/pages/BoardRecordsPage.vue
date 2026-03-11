@@ -24,13 +24,13 @@ const errorMessage = ref('')
 
 const filterType = ref('all')
 const page = ref(1)
-const pageSize = ref(50)
+const pageSize = ref(20)
 const formVisible = ref(false)
 const editingSessionId = ref(null)
 
 const pagination = reactive({
   page: 1,
-  pageSize: 50,
+  pageSize: 20,
   total: 0,
   totalPages: 1,
   hasPrev: false,

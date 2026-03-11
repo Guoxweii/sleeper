@@ -373,7 +373,7 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
 
   const type = request.query?.type
   const rawPage = Number(request.query?.page || 1)
-  const rawPageSize = Number(request.query?.pageSize ?? request.query?.limit ?? 50)
+  const rawPageSize = Number(request.query?.pageSize ?? request.query?.limit ?? 20)
 
   if (!Number.isFinite(rawPage) || rawPage < 1) {
     reply.code(400).send({ message: 'page 参数无效' })
