@@ -87,3 +87,135 @@ export function currentIsoMonth() {
   const now = DateTime.local()
   return `${now.year}-${String(now.month).padStart(2, '0')}`
 }
+
+export function parseIsoWeekValue(value) {
+  const match = /^([0-9]{4})-W([0-9]{2})$/.exec(value || '')
+  if (!match) {
+    return null
+  }
+
+  return {
+    weekYear: Number(match[1]),
+    weekNumber: Number(match[2])
+  }
+}
+
+export function parseIsoMonthValue(value) {
+  const match = /^([0-9]{4})-([0-9]{2})$/.exec(value || '')
+  if (!match) {
+    return null
+  }
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2])
+  }
+}
+
+export function buildRecentYears(baseYear, count = 3) {
+  if (!Number.isFinite(baseYear) || count < 1) {
+    return []
+  }
+
+  return Array.from({ length: count }, (_, index) => baseYear - index)
+}
+
+export function buildIsoWeekOptions(weekYear) {
+  if (!Number.isFinite(weekYear)) {
+    return []
+  }
+
+  const options = []
+
+  for (let weekNumber = 1; weekNumber <= 53; weekNumber += 1) {
+    const start = DateTime.fromObject(
+      {
+        weekYear,
+        weekNumber,
+        weekday: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        millisecond: 0
+      },
+      { zone: 'local' }
+    )
+
+    if (!start.isValid || start.weekYear !== weekYear || start.weekNumber !== weekNumber) {
+      continue
+    }
+
+    const end = start.plus({ days: 6 })
+    const value = `${weekYear}-W${String(weekNumber).padStart(2, '0')}`
+    const rangeText = `${start.toFormat('MM/dd')} - ${end.toFormat('MM/dd')}`
+
+    options.push({
+      value,
+      weekNumber,
+      rangeText,
+      label: `第 ${weekNumber} 周（${rangeText}）`
+    })
+  }
+
+  return options
+}
+
+export function buildMonthOptions(year) {
+  if (!Number.isFinite(year)) {
+    return []
+  }
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1
+    const start = DateTime.fromObject(
+      {
+        year,
+        month,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        millisecond: 0
+      },
+      { zone: 'local' }
+    )
+    const end = start.endOf('month')
+    const value = `${year}-${String(month).padStart(2, '0')}`
+    const rangeText = `${start.toFormat('MM/dd')} - ${end.toFormat('MM/dd')}`
+
+    return {
+      value,
+      month,
+      rangeText,
+      label: `${month} 月（${rangeText}）`
+    }
+  })
+}
+
+export function formatIsoWeekSummary(value) {
+  const parsed = parseIsoWeekValue(value)
+  if (!parsed) {
+    return ''
+  }
+
+  const match = buildIsoWeekOptions(parsed.weekYear).find((item) => item.weekNumber === parsed.weekNumber)
+  if (!match) {
+    return `${parsed.weekYear} 年第 ${parsed.weekNumber} 周`
+  }
+
+  return `${parsed.weekYear} 年第 ${parsed.weekNumber} 周 · ${match.rangeText}`
+}
+
+export function formatIsoMonthSummary(value) {
+  const parsed = parseIsoMonthValue(value)
+  if (!parsed) {
+    return ''
+  }
+
+  const match = buildMonthOptions(parsed.year).find((item) => item.month === parsed.month)
+  if (!match) {
+    return `${parsed.year} 年 ${parsed.month} 月`
+  }
+
+  return `${parsed.year} 年 ${parsed.month} 月 · ${match.rangeText}`
+}
