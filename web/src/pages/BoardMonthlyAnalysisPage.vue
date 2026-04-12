@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
+import { boardResponseSchema, monthlyAnalysisResponseSchema } from '../../../shared/index.js'
 import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
 import {
   buildMonthOptions,
@@ -35,12 +36,17 @@ let latestPageLoadId = 0
 let latestAnalysisLoadId = 0
 
 async function fetchBoardData(targetBoardId) {
-  return api.get(`/api/boards/${targetBoardId}`)
+  return api.get(`/api/boards/${targetBoardId}`, {
+    responseSchema: boardResponseSchema
+  })
 }
 
 async function fetchAnalysisData(targetBoardId, targetMonth) {
   return api.get(
-    `/api/boards/${targetBoardId}/analysis/monthly?month=${encodeURIComponent(targetMonth)}&tz=${encodeURIComponent(timezone)}`
+    `/api/boards/${targetBoardId}/analysis/monthly?month=${encodeURIComponent(targetMonth)}&tz=${encodeURIComponent(timezone)}`,
+    {
+      responseSchema: monthlyAnalysisResponseSchema
+    }
   )
 }
 

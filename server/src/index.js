@@ -5,6 +5,26 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import staticPlugin from '@fastify/static'
 import { DateTime } from 'luxon'
+import {
+  authResponseSchema,
+  boardResponseSchema,
+  boardsResponseSchema,
+  createBoardBodySchema,
+  createSessionBodySchema,
+  errorResponseSchema,
+  idParamsSchema,
+  listSessionsQuerySchema,
+  loginBodySchema,
+  monthlyAnalysisQuerySchema,
+  monthlyAnalysisResponseSchema,
+  okResponseSchema,
+  sessionResponseSchema,
+  sessionsResponseSchema,
+  updateBoardBodySchema,
+  updateSessionBodySchema,
+  weeklyAnalysisQuerySchema,
+  weeklyAnalysisResponseSchema
+} from '../../shared/index.js'
 import { config, paths } from './config.js'
 import { buildMonthlyAnalysis, buildWeeklyAnalysis, resolveMonth, resolveWeek } from './analysis.js'
 import { createDb, hasSessionOverlap, seedAdminUser, seedDefaultBoards } from './db.js'
@@ -116,6 +136,112 @@ function validateRange(startAt, endAt) {
   }
 }
 
+const FIELD_LABELS = {
+  username: '用户名',
+  password: '密码',
+  name: 'Board 名称',
+  description: '描述',
+  birthDate: 'birthDate',
+  type: 'type',
+  startAt: 'startAt',
+  endAt: 'endAt',
+  note: 'note',
+  timezone: 'timezone',
+  id: 'id',
+  page: 'page',
+  pageSize: 'pageSize',
+  limit: 'limit',
+  week: 'week',
+  month: 'month',
+  tz: 'tz'
+}
+
+function fieldLabel(path) {
+  const target = path[path.length - 1]
+  if (typeof target === 'string' && FIELD_LABELS[target]) {
+    return FIELD_LABELS[target]
+  }
+
+  return '请求参数'
+}
+
+function formatValidationError(error, fallbackMessage = '参数错误') {
+  const issue = error.issues?.[0]
+  if (!issue) {
+    return fallbackMessage
+  }
+
+  if (issue.code === 'unrecognized_keys' && issue.keys?.length) {
+    return `包含不支持的字段：${issue.keys.join('、')}`
+  }
+
+  const label = fieldLabel(issue.path || [])
+
+  if (issue.code === 'invalid_type') {
+    return `${label} 参数类型无效`
+  }
+
+  if (issue.code === 'too_small' && issue.origin === 'string') {
+    return `${label} 不能为空`
+  }
+
+  if (issue.code === 'too_small' && issue.origin === 'number') {
+    return `${label} 参数无效`
+  }
+
+  if (issue.code === 'invalid_value') {
+    if (label === 'type') {
+      return 'type 仅支持 night、nap、fragmented'
+    }
+
+    return `${label} 参数无效`
+  }
+
+  if (issue.code === 'invalid_format') {
+    if (label === 'birthDate') {
+      return 'birthDate 格式必须为 YYYY-MM-DD'
+    }
+
+    if (label === 'week') {
+      return 'week 参数格式必须为 YYYY-Www'
+    }
+
+    if (label === 'month') {
+      return 'month 参数格式必须为 YYYY-MM'
+    }
+
+    return `${label} 格式无效`
+  }
+
+  if (issue.code === 'custom') {
+    if (label === 'timezone' || label === 'tz') {
+      return '无效时区，请传入 IANA 格式时区，例如 Asia/Shanghai'
+    }
+
+    return issue.message || fallbackMessage
+  }
+
+  return issue.message || fallbackMessage
+}
+
+function parseInput(reply, schema, value, fallbackMessage) {
+  const result = schema.safeParse(value)
+  if (!result.success) {
+    sendError(reply, 400, formatValidationError(result.error, fallbackMessage))
+    return null
+  }
+
+  return result.data
+}
+
+function sendError(reply, statusCode, message) {
+  return reply.code(statusCode).send(errorResponseSchema.parse({ message }))
+}
+
+function sendValidated(reply, schema, payload, statusCode = 200) {
+  return reply.code(statusCode).send(schema.parse(payload))
+}
+
 const db = createDb()
 const seededAdmin = seedAdminUser(db)
 const seededBoards = seedDefaultBoards(db)
@@ -213,7 +339,7 @@ async function requireAuth(request, reply) {
 
   if (!user) {
     clearSessionCookie(reply)
-    reply.code(401).send({ message: '未登录或登录已过期' })
+    sendError(reply, 401, '未登录或登录已过期')
     return
   }
 
@@ -224,29 +350,27 @@ function findBoard(boardId) {
   return db.prepare('SELECT * FROM boards WHERE id = ? LIMIT 1').get(boardId)
 }
 
-app.get('/api/health', async () => ({ ok: true }))
+app.get('/api/health', async () => okResponseSchema.parse({ ok: true }))
 
 app.post('/api/auth/login', async (request, reply) => {
-  const { username, password } = request.body || {}
-
-  if (!username || !password) {
-    reply.code(400).send({ message: '请填写用户名和密码' })
+  const body = parseInput(reply, loginBodySchema, request.body || {}, '请填写用户名和密码')
+  if (!body) {
     return
   }
 
   const user = db
     .prepare('SELECT id, username, password_hash FROM users WHERE username = ? LIMIT 1')
-    .get(String(username).trim())
+    .get(body.username)
 
-  if (!user || !verifyPassword(String(password), user.password_hash)) {
-    reply.code(401).send({ message: '用户名或密码错误' })
+  if (!user || !verifyPassword(body.password, user.password_hash)) {
+    sendError(reply, 401, '用户名或密码错误')
     return
   }
 
   const session = createSession(user.id)
   setSessionCookie(reply, session.token, session.expiresAt)
 
-  reply.send({
+  sendValidated(reply, authResponseSchema, {
     user: {
       id: user.id,
       username: user.username
@@ -258,89 +382,93 @@ app.post('/api/auth/logout', { preHandler: requireAuth }, async (request, reply)
   const token = request.cookies[SESSION_COOKIE]
   removeSession(token)
   clearSessionCookie(reply)
-  reply.send({ ok: true })
+  sendValidated(reply, okResponseSchema, { ok: true })
 })
 
 app.get('/api/auth/me', { preHandler: requireAuth }, async (request) => {
-  return {
+  return authResponseSchema.parse({
     user: {
       id: request.user.id,
       username: request.user.username
     }
-  }
+  })
 })
 
 app.get('/api/boards', { preHandler: requireAuth }, async () => {
   const rows = db.prepare('SELECT * FROM boards ORDER BY updated_at DESC, id DESC').all()
-  return {
+  return boardsResponseSchema.parse({
     boards: rows.map(boardDto)
-  }
+  })
 })
 
 app.get('/api/boards/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  if (!params) {
+    return
+  }
+
+  const boardId = params.id
   const board = findBoard(boardId)
 
   if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+    sendError(reply, 404, 'Board 不存在')
     return
   }
 
-  reply.send({ board: boardDto(board) })
+  sendValidated(reply, boardResponseSchema, { board: boardDto(board) })
 })
 
 app.post('/api/boards', { preHandler: requireAuth }, async (request, reply) => {
-  const name = String(request.body?.name || '').trim()
-  const description = String(request.body?.description || '').trim()
-  let birthDate
-
-  try {
-    birthDate = parseBirthDateInput(request.body?.birthDate)
-  } catch (error) {
-    reply.code(400).send({ message: error.message || 'birthDate 参数错误' })
+  const body = parseInput(reply, createBoardBodySchema, request.body || {}, 'Board 参数错误')
+  if (!body) {
     return
   }
 
-  if (!name) {
-    reply.code(400).send({ message: 'Board 名称不能为空' })
+  const { name, description } = body
+  let birthDate
+
+  try {
+    birthDate = parseBirthDateInput(body.birthDate)
+  } catch (error) {
+    sendError(reply, 400, error.message || 'birthDate 参数错误')
     return
   }
 
   const now = nowUtcIso()
   const result = db
     .prepare('INSERT INTO boards (name, description, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-    .run(name, description, birthDate, now, now)
+      .run(name, description, birthDate, now, now)
 
   const board = findBoard(Number(result.lastInsertRowid))
-  reply.code(201).send({ board: boardDto(board) })
+  sendValidated(reply, boardResponseSchema, { board: boardDto(board) }, 201)
 })
 
 app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const body = parseInput(reply, updateBoardBodySchema, request.body || {}, 'Board 参数错误')
+  if (!params || !body) {
+    return
+  }
+
+  const boardId = params.id
   const board = findBoard(boardId)
 
   if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+    sendError(reply, 404, 'Board 不存在')
     return
   }
 
-  const name = request.body?.name === undefined ? board.name : String(request.body.name).trim()
-  const description =
-    request.body?.description === undefined ? board.description || '' : String(request.body.description).trim()
+  const name = body.name === undefined ? board.name : body.name
+  const description = body.description === undefined ? board.description || '' : body.description
   let birthDate = board.birth_date || null
 
-  if (request.body?.birthDate !== undefined) {
+  if (body.birthDate !== undefined) {
     try {
-      birthDate = parseBirthDateInput(request.body?.birthDate)
+      birthDate = parseBirthDateInput(body.birthDate)
     } catch (error) {
-      reply.code(400).send({ message: error.message || 'birthDate 参数错误' })
+      sendError(reply, 400, error.message || 'birthDate 参数错误')
       return
     }
-  }
-
-  if (!name) {
-    reply.code(400).send({ message: 'Board 名称不能为空' })
-    return
   }
 
   const now = nowUtcIso()
@@ -353,55 +481,48 @@ app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply)
   )
 
   const updated = findBoard(boardId)
-  reply.send({ board: boardDto(updated) })
+  sendValidated(reply, boardResponseSchema, { board: boardDto(updated) })
 })
 
 app.delete('/api/boards/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  if (!params) {
+    return
+  }
+
+  const boardId = params.id
   const board = findBoard(boardId)
 
   if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+    sendError(reply, 404, 'Board 不存在')
     return
   }
 
   db.prepare('DELETE FROM boards WHERE id = ?').run(boardId)
-  reply.send({ ok: true })
+  sendValidated(reply, okResponseSchema, { ok: true })
 })
 
 app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
+  const paramsInput = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const query = parseInput(reply, listSessionsQuerySchema, request.query || {}, '查询参数无效')
+  if (!paramsInput || !query) {
+    return
+  }
+
+  const boardId = paramsInput.id
   const board = findBoard(boardId)
 
   if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+    sendError(reply, 404, 'Board 不存在')
     return
   }
 
-  const type = request.query?.type
-  const rawPage = Number(request.query?.page || 1)
-  const rawPageSize = Number(request.query?.pageSize ?? request.query?.limit ?? 20)
-
-  if (!Number.isFinite(rawPage) || rawPage < 1) {
-    reply.code(400).send({ message: 'page 参数无效' })
-    return
-  }
-
-  if (!Number.isFinite(rawPageSize) || rawPageSize < 1) {
-    reply.code(400).send({ message: 'pageSize 参数无效' })
-    return
-  }
-
-  const page = Math.floor(rawPage)
-  const pageSize = Math.min(Math.floor(rawPageSize), 200)
+  const { type, page } = query
+  const pageSize = Math.min(query.pageSize, 200)
   const params = [boardId]
   let whereClause = 'WHERE board_id = ?'
 
-  if (type && type !== 'all') {
-    if (!SLEEP_TYPES.has(type)) {
-      reply.code(400).send({ message: '筛选类型无效' })
-      return
-    }
+  if (type !== 'all') {
     whereClause += ' AND type = ?'
     params.push(type)
   }
@@ -423,7 +544,7 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
     )
     .all(...params, pageSize, offset)
 
-  reply.send({
+  sendValidated(reply, sessionsResponseSchema, {
     sessions: rows.map(sessionDto),
     pagination: {
       page: currentPage,
@@ -437,25 +558,31 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
 })
 
 app.post('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const body = parseInput(reply, createSessionBodySchema, request.body || {}, '记录参数错误')
+  if (!params || !body) {
+    return
+  }
+
+  const boardId = params.id
   const board = findBoard(boardId)
 
   if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+    sendError(reply, 404, 'Board 不存在')
     return
   }
 
   try {
-    const timezone = String(request.body?.timezone || config.defaultTimezone)
-    const type = normalizeType(request.body?.type)
-    const startAt = parseTimeInput(request.body?.startAt, 'startAt', timezone)
-    const endAt = parseOptionalTimeInput(request.body?.endAt, 'endAt', timezone)
-    const note = cleanNote(request.body?.note)
+    const timezone = body.timezone || config.defaultTimezone
+    const type = normalizeType(body.type)
+    const startAt = parseTimeInput(body.startAt, 'startAt', timezone)
+    const endAt = parseOptionalTimeInput(body.endAt, 'endAt', timezone)
+    const note = cleanNote(body.note)
 
     validateRange(startAt, endAt)
 
     if (hasSessionOverlap(db, boardId, startAt, endAt)) {
-      reply.code(409).send({ message: '该时间段与已有记录重叠，请调整时间' })
+      sendError(reply, 409, '该时间段与已有记录重叠，请调整时间')
       return
     }
 
@@ -472,39 +599,44 @@ app.post('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request
     db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').run(now, boardId)
 
     const created = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(Number(result.lastInsertRowid))
-    reply.code(201).send({ session: sessionDto(created) })
+    sendValidated(reply, sessionResponseSchema, { session: sessionDto(created) }, 201)
   } catch (error) {
-    reply.code(400).send({ message: error.message || '参数错误' })
+    sendError(reply, 400, error.message || '参数错误')
   }
 })
 
 app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const sessionId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const body = parseInput(reply, updateSessionBodySchema, request.body || {}, '记录参数错误')
+  if (!params || !body) {
+    return
+  }
+
+  const sessionId = params.id
   const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
 
   if (!existing) {
-    reply.code(404).send({ message: '记录不存在' })
+    sendError(reply, 404, '记录不存在')
     return
   }
 
   try {
-    const timezone = String(request.body?.timezone || config.defaultTimezone)
-    const type =
-      request.body?.type === undefined ? existing.type : normalizeType(request.body?.type)
+    const timezone = body.timezone || config.defaultTimezone
+    const type = body.type === undefined ? existing.type : normalizeType(body.type)
     const startAt =
-      request.body?.startAt === undefined
+      body.startAt === undefined
         ? existing.start_at
-        : parseTimeInput(request.body?.startAt, 'startAt', timezone)
+        : parseTimeInput(body.startAt, 'startAt', timezone)
     const endAt =
-      request.body?.endAt === undefined
+      body.endAt === undefined
         ? existing.end_at
-        : parseOptionalTimeInput(request.body?.endAt, 'endAt', timezone)
-    const note = request.body?.note === undefined ? existing.note || '' : cleanNote(request.body?.note)
+        : parseOptionalTimeInput(body.endAt, 'endAt', timezone)
+    const note = body.note === undefined ? existing.note || '' : cleanNote(body.note)
 
     validateRange(startAt, endAt)
 
     if (hasSessionOverlap(db, existing.board_id, startAt, endAt, sessionId)) {
-      reply.code(409).send({ message: '该时间段与已有记录重叠，请调整时间' })
+      sendError(reply, 409, '该时间段与已有记录重叠，请调整时间')
       return
     }
 
@@ -520,39 +652,50 @@ app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, repl
     db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').run(now, existing.board_id)
 
     const updated = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
-    reply.send({ session: sessionDto(updated) })
+    sendValidated(reply, sessionResponseSchema, { session: sessionDto(updated) })
   } catch (error) {
-    reply.code(400).send({ message: error.message || '参数错误' })
+    sendError(reply, 400, error.message || '参数错误')
   }
 })
 
 app.delete('/api/sessions/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const sessionId = Number(request.params.id)
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  if (!params) {
+    return
+  }
+
+  const sessionId = params.id
   const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
 
   if (!existing) {
-    reply.code(404).send({ message: '记录不存在' })
+    sendError(reply, 404, '记录不存在')
     return
   }
 
   db.prepare('DELETE FROM sleep_sessions WHERE id = ?').run(sessionId)
   db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').run(nowUtcIso(), existing.board_id)
-  reply.send({ ok: true })
+  sendValidated(reply, okResponseSchema, { ok: true })
 })
 
 app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
-  const board = findBoard(boardId)
-
-  if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const query = parseInput(reply, weeklyAnalysisQuerySchema, request.query || {}, '分析参数无效')
+  if (!params || !query) {
     return
   }
 
-  const timezone = String(request.query?.tz || config.defaultTimezone)
+  const boardId = params.id
+  const board = findBoard(boardId)
+
+  if (!board) {
+    sendError(reply, 404, 'Board 不存在')
+    return
+  }
+
+  const timezone = query.tz || config.defaultTimezone
 
   try {
-    const weekRange = resolveWeek(request.query?.week, timezone)
+    const weekRange = resolveWeek(query.week, timezone)
     const rows = db
       .prepare(
         `
@@ -576,7 +719,7 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
       endAt: row.end_at
     }))
 
-    reply.send({
+    sendValidated(reply, weeklyAnalysisResponseSchema, {
       board: boardDto(board),
       analysis: {
         ...baseAnalysis,
@@ -584,23 +727,29 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
       }
     })
   } catch (error) {
-    reply.code(400).send({ message: error.message || '分析参数无效' })
+    sendError(reply, 400, error.message || '分析参数无效')
   }
 })
 
 app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (request, reply) => {
-  const boardId = Number(request.params.id)
-  const board = findBoard(boardId)
-
-  if (!board) {
-    reply.code(404).send({ message: 'Board 不存在' })
+  const params = parseInput(reply, idParamsSchema, request.params || {}, 'id 参数无效')
+  const query = parseInput(reply, monthlyAnalysisQuerySchema, request.query || {}, '分析参数无效')
+  if (!params || !query) {
     return
   }
 
-  const timezone = String(request.query?.tz || config.defaultTimezone)
+  const boardId = params.id
+  const board = findBoard(boardId)
+
+  if (!board) {
+    sendError(reply, 404, 'Board 不存在')
+    return
+  }
+
+  const timezone = query.tz || config.defaultTimezone
 
   try {
-    const monthRange = resolveMonth(request.query?.month, timezone)
+    const monthRange = resolveMonth(query.month, timezone)
     const rows = db
       .prepare(
         `
@@ -624,7 +773,7 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
       endAt: row.end_at
     }))
 
-    reply.send({
+    sendValidated(reply, monthlyAnalysisResponseSchema, {
       board: boardDto(board),
       analysis: {
         ...baseAnalysis,
@@ -632,7 +781,7 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
       }
     })
   } catch (error) {
-    reply.code(400).send({ message: error.message || '分析参数无效' })
+    sendError(reply, 400, error.message || '分析参数无效')
   }
 })
 
@@ -644,7 +793,7 @@ if (fs.existsSync(paths.webDist)) {
 
   app.setNotFoundHandler((request, reply) => {
     if (request.raw.url?.startsWith('/api/')) {
-      reply.code(404).send({ message: '接口不存在' })
+      sendError(reply, 404, '接口不存在')
       return
     }
     reply.sendFile('index.html')
@@ -652,10 +801,10 @@ if (fs.existsSync(paths.webDist)) {
 } else {
   app.setNotFoundHandler((request, reply) => {
     if (request.raw.url?.startsWith('/api/')) {
-      reply.code(404).send({ message: '接口不存在' })
+      sendError(reply, 404, '接口不存在')
       return
     }
-    reply.code(404).send({ message: '前端资源未构建，请先执行 npm run build' })
+    sendError(reply, 404, '前端资源未构建，请先执行 npm run build')
   })
 }
 

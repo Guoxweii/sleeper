@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
+import { boardResponseSchema, weeklyAnalysisResponseSchema } from '../../../shared/index.js'
 import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
 import {
   buildIsoWeekOptions,
@@ -35,12 +36,17 @@ let latestPageLoadId = 0
 let latestAnalysisLoadId = 0
 
 async function fetchBoardData(targetBoardId) {
-  return api.get(`/api/boards/${targetBoardId}`)
+  return api.get(`/api/boards/${targetBoardId}`, {
+    responseSchema: boardResponseSchema
+  })
 }
 
 async function fetchAnalysisData(targetBoardId, targetWeek) {
   return api.get(
-    `/api/boards/${targetBoardId}/analysis/weekly?week=${encodeURIComponent(targetWeek)}&tz=${encodeURIComponent(timezone)}`
+    `/api/boards/${targetBoardId}/analysis/weekly?week=${encodeURIComponent(targetWeek)}&tz=${encodeURIComponent(timezone)}`,
+    {
+      responseSchema: weeklyAnalysisResponseSchema
+    }
   )
 }
 

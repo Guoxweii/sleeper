@@ -3,6 +3,13 @@ import { DateTime } from 'luxon'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../lib/api'
+import {
+  boardResponseSchema,
+  boardsResponseSchema,
+  createBoardBodySchema,
+  okResponseSchema,
+  updateBoardBodySchema
+} from '../../../shared/index.js'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -51,7 +58,9 @@ async function loadBoards() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await api.get('/api/boards')
+    const response = await api.get('/api/boards', {
+      responseSchema: boardsResponseSchema
+    })
     boards.value = response.boards || []
   } catch (error) {
     errorMessage.value = error.message || '加载 Board 失败'
@@ -97,9 +106,15 @@ async function saveBoard() {
     }
 
     if (editingBoardId.value) {
-      await api.patch(`/api/boards/${editingBoardId.value}`, payload)
+      await api.patch(`/api/boards/${editingBoardId.value}`, payload, {
+        bodySchema: updateBoardBodySchema,
+        responseSchema: boardResponseSchema
+      })
     } else {
-      await api.post('/api/boards', payload)
+      await api.post('/api/boards', payload, {
+        bodySchema: createBoardBodySchema,
+        responseSchema: boardResponseSchema
+      })
     }
 
     formVisible.value = false
@@ -118,7 +133,9 @@ async function deleteBoard(board) {
   }
 
   try {
-    await api.delete(`/api/boards/${board.id}`)
+    await api.delete(`/api/boards/${board.id}`, {
+      responseSchema: okResponseSchema
+    })
     await loadBoards()
   } catch (error) {
     errorMessage.value = error.message || '删除 Board 失败'
