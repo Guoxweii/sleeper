@@ -29,12 +29,36 @@ function formatSourceRecords(analysis, timezone) {
   })
 }
 
-function periodText(scope, analysis) {
-  const period = analysis?.period || {}
-  if (scope === 'weekly') {
-    return `周 ${period.week || '-'}（${period.startDate || '-'} ~ ${period.endDate || '-'}）`
+function resolvePeriodDates(analysis, timezone) {
+  const rangeStart = analysis?.range?.startAt
+  const rangeEnd = analysis?.range?.endAt
+
+  if (rangeStart && rangeEnd) {
+    const start = DateTime.fromISO(rangeStart, { setZone: true }).setZone(timezone)
+    const end = DateTime.fromISO(rangeEnd, { setZone: true }).setZone(timezone).minus({ days: 1 })
+
+    if (start.isValid && end.isValid) {
+      return {
+        startDate: start.toFormat('yyyy-LL-dd'),
+        endDate: end.toFormat('yyyy-LL-dd')
+      }
+    }
   }
-  return `月 ${period.month || '-'}（${period.startDate || '-'} ~ ${period.endDate || '-'}）`
+
+  const period = analysis?.period || {}
+  return {
+    startDate: period.startDate || '-',
+    endDate: period.endDate || '-'
+  }
+}
+
+function periodText(scope, analysis, timezone) {
+  const { startDate, endDate } = resolvePeriodDates(analysis, timezone)
+
+  if (scope === 'weekly') {
+    return `周 ${analysis?.week || analysis?.period?.week || '-'}（${startDate} ~ ${endDate}）`
+  }
+  return `月 ${analysis?.month || analysis?.period?.month || '-'}（${startDate} ~ ${endDate}）`
 }
 
 function calculateAgeText(boardBirthDate, timezone, referenceDate) {
@@ -75,10 +99,12 @@ function buildAgeContext(analysis, boardBirthDate, timezone) {
     }
   }
 
-  const periodEnd = analysis?.period?.endDate
-  const referenceDate = periodEnd
-    ? DateTime.fromISO(periodEnd, { zone: timezone }).minus({ days: 1 })
-    : DateTime.local().setZone(timezone)
+  const rangeEnd = analysis?.range?.endAt
+  const referenceDate = rangeEnd
+    ? DateTime.fromISO(rangeEnd, { setZone: true }).setZone(timezone).minus({ days: 1 })
+    : analysis?.period?.endDate
+      ? DateTime.fromISO(analysis.period.endDate, { zone: timezone }).startOf('day')
+      : DateTime.local().setZone(timezone)
 
   return {
     ageText: calculateAgeText(boardBirthDate, timezone, referenceDate)
@@ -102,7 +128,7 @@ export function buildAiConsultPrompt({ scope, boardName, boardBirthDate, analysi
     `- 年龄：${ageContext.ageText}`,
     '',
     '【数据上下文】',
-    `- 统计周期：${periodText(scope, analysis)}`,
+    `- 统计周期：${periodText(scope, analysis, analysis.timezone || timezone)}`,
     `- 时区：${analysis.timezone || timezone}`,
     `- 统计规则：${analysis.assignmentRule === 'wake_day' ? '整段睡眠按苏醒日归属' : analysis.assignmentRule || '-'}`,
     `- 原始记录数：${recordCount}`,

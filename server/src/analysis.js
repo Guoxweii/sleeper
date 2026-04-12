@@ -602,6 +602,7 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
 
   const totalMinutes = Object.values(typeMinutes).reduce((sum, value) => sum + value, 0)
   const activeDays = dayMinutes.filter((minutes) => minutes > 0).length
+  const periodDays = dayMinutes.length
   const averageSleepClockMinutes = averageClockMinutes(sleepClockSamples)
   const averageWakeClockMinutes = averageClockMinutes(wakeClockSamples)
 
@@ -626,7 +627,7 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
   })
 
   const review = buildProfessionalReview({
-    averageDailyMinutes: activeDays > 0 ? totalMinutes / activeDays : 0,
+    averageDailyMinutes: periodDays > 0 ? totalMinutes / periodDays : 0,
     activeDays,
     byType,
     dailyValues: dayMinutes,
@@ -642,7 +643,7 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
     assignmentRule: 'wake_day',
     totals: {
       totalMinutes: Math.round(totalMinutes),
-      averageDailyMinutes: activeDays > 0 ? Math.round(totalMinutes / activeDays) : 0,
+      averageDailyMinutes: periodDays > 0 ? Math.round(totalMinutes / periodDays) : 0,
       activeDays,
       sessionsCount,
       averageSleepTime: formatClock(averageSleepClockMinutes),

@@ -14,6 +14,7 @@ import {
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
 
 const board = ref(null)
 const sessions = ref([])
@@ -43,6 +44,9 @@ const form = reactive({
   endAt: '',
   note: ''
 })
+
+let latestPageLoadId = 0
+let latestSessionsLoadId = 0
 
 function typeBadgeClass(type) {
   if (type === 'night') return 'bg-cyan-600 text-white'
@@ -85,50 +89,135 @@ function sessionDurationLabel(session) {
   return formatDuration(minutesBetween(session.startAt, session.endAt))
 }
 
-async function loadBoard() {
-  const response = await api.get(`/api/boards/${boardId.value}`)
-  board.value = response.board
+function resetPagination(currentPage = 1, currentPageSize = pageSize.value) {
+  pagination.page = currentPage
+  pagination.pageSize = currentPageSize
+  pagination.total = 0
+  pagination.totalPages = 1
+  pagination.hasPrev = false
+  pagination.hasNext = false
+}
+
+function applySessionsResponse(response, fallbackPage, fallbackPageSize) {
+  sessions.value = response.sessions || []
+
+  const meta = response.pagination || {}
+  pagination.page = meta.page || fallbackPage
+  pagination.pageSize = meta.pageSize || fallbackPageSize
+  pagination.total = meta.total || 0
+  pagination.totalPages = meta.totalPages || 1
+  pagination.hasPrev = Boolean(meta.hasPrev)
+  pagination.hasNext = Boolean(meta.hasNext)
+
+  page.value = pagination.page
+  pageSize.value = pagination.pageSize
+}
+
+function createSessionsRequestSnapshot() {
+  return {
+    boardId: boardId.value,
+    filterType: filterType.value,
+    page: page.value,
+    pageSize: pageSize.value
+  }
+}
+
+function isCurrentSessionsRequest(loadId, snapshot) {
+  return (
+    loadId === latestSessionsLoadId &&
+    snapshot.boardId === boardId.value &&
+    snapshot.filterType === filterType.value &&
+    snapshot.page === page.value &&
+    snapshot.pageSize === pageSize.value
+  )
+}
+
+async function fetchBoardData(targetBoardId) {
+  return api.get(`/api/boards/${targetBoardId}`)
+}
+
+async function fetchSessionsData(snapshot) {
+  const query = new URLSearchParams()
+  if (snapshot.filterType !== 'all') {
+    query.set('type', snapshot.filterType)
+  }
+  query.set('page', String(snapshot.page))
+  query.set('pageSize', String(snapshot.pageSize))
+
+  return api.get(`/api/boards/${snapshot.boardId}/sessions?${query.toString()}`)
 }
 
 async function loadSessions() {
+  const loadId = ++latestSessionsLoadId
+  const snapshot = createSessionsRequestSnapshot()
   sessionsLoading.value = true
+
   try {
-    const query = new URLSearchParams()
-    if (filterType.value !== 'all') {
-      query.set('type', filterType.value)
+    const response = await fetchSessionsData(snapshot)
+    if (!isCurrentSessionsRequest(loadId, snapshot)) {
+      return
     }
-    query.set('page', String(page.value))
-    query.set('pageSize', String(pageSize.value))
 
-    const queryString = query.toString()
-    const response = await api.get(`/api/boards/${boardId.value}/sessions?${queryString}`)
-    sessions.value = response.sessions || []
+    applySessionsResponse(response, snapshot.page, snapshot.pageSize)
+  } catch (error) {
+    if (!isCurrentSessionsRequest(loadId, snapshot)) {
+      return
+    }
 
-    const meta = response.pagination || {}
-    pagination.page = meta.page || page.value
-    pagination.pageSize = meta.pageSize || pageSize.value
-    pagination.total = meta.total || 0
-    pagination.totalPages = meta.totalPages || 1
-    pagination.hasPrev = Boolean(meta.hasPrev)
-    pagination.hasNext = Boolean(meta.hasNext)
-
-    page.value = pagination.page
-    pageSize.value = pagination.pageSize
+    sessions.value = []
+    resetPagination(snapshot.page, snapshot.pageSize)
+    throw error
   } finally {
-    sessionsLoading.value = false
+    if (loadId === latestSessionsLoadId) {
+      sessionsLoading.value = false
+    }
   }
 }
 
 async function loadPage() {
+  const loadId = ++latestPageLoadId
+  const sessionsLoadId = ++latestSessionsLoadId
+  const snapshot = createSessionsRequestSnapshot()
   loading.value = true
+  sessionsLoading.value = true
   errorMessage.value = ''
+  board.value = null
+  sessions.value = []
+  resetPagination(snapshot.page, snapshot.pageSize)
 
   try {
-    await Promise.all([loadBoard(), loadSessions()])
+    const [boardResponse, sessionsResponse] = await Promise.all([
+      fetchBoardData(snapshot.boardId),
+      fetchSessionsData(snapshot)
+    ])
+
+    if (loadId === latestPageLoadId && snapshot.boardId === boardId.value) {
+      board.value = boardResponse.board
+    }
+
+    if (isCurrentSessionsRequest(sessionsLoadId, snapshot)) {
+      applySessionsResponse(sessionsResponse, snapshot.page, snapshot.pageSize)
+    }
   } catch (error) {
+    if (
+      loadId !== latestPageLoadId ||
+      !isCurrentSessionsRequest(sessionsLoadId, snapshot) ||
+      snapshot.boardId !== boardId.value
+    ) {
+      return
+    }
+
+    board.value = null
+    sessions.value = []
+    resetPagination(snapshot.page, snapshot.pageSize)
     errorMessage.value = error.message || '加载记录失败'
   } finally {
-    loading.value = false
+    if (loadId === latestPageLoadId) {
+      loading.value = false
+    }
+    if (loadId === latestPageLoadId && sessionsLoadId === latestSessionsLoadId) {
+      sessionsLoading.value = false
+    }
   }
 }
 
@@ -165,7 +254,8 @@ async function submitForm() {
       type: form.type,
       startAt: form.startAt,
       endAt: form.endAt || null,
-      note: form.note
+      note: form.note,
+      timezone
     }
 
     if (editingSessionId.value) {
