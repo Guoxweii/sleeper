@@ -4,6 +4,14 @@ import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
 import {
+  boardResponseSchema,
+  createSessionBodySchema,
+  okResponseSchema,
+  sessionResponseSchema,
+  sessionsResponseSchema,
+  updateSessionBodySchema
+} from '../../../shared/index.js'
+import {
   SESSION_TYPE_OPTIONS,
   formatDateTimeWithWeekday,
   formatDuration,
@@ -133,7 +141,9 @@ function isCurrentSessionsRequest(loadId, snapshot) {
 }
 
 async function fetchBoardData(targetBoardId) {
-  return api.get(`/api/boards/${targetBoardId}`)
+  return api.get(`/api/boards/${targetBoardId}`, {
+    responseSchema: boardResponseSchema
+  })
 }
 
 async function fetchSessionsData(snapshot) {
@@ -144,7 +154,9 @@ async function fetchSessionsData(snapshot) {
   query.set('page', String(snapshot.page))
   query.set('pageSize', String(snapshot.pageSize))
 
-  return api.get(`/api/boards/${snapshot.boardId}/sessions?${query.toString()}`)
+  return api.get(`/api/boards/${snapshot.boardId}/sessions?${query.toString()}`, {
+    responseSchema: sessionsResponseSchema
+  })
 }
 
 async function loadSessions() {
@@ -259,9 +271,15 @@ async function submitForm() {
     }
 
     if (editingSessionId.value) {
-      await api.patch(`/api/sessions/${editingSessionId.value}`, payload)
+      await api.patch(`/api/sessions/${editingSessionId.value}`, payload, {
+        bodySchema: updateSessionBodySchema,
+        responseSchema: sessionResponseSchema
+      })
     } else {
-      await api.post(`/api/boards/${boardId.value}/sessions`, payload)
+      await api.post(`/api/boards/${boardId.value}/sessions`, payload, {
+        bodySchema: createSessionBodySchema,
+        responseSchema: sessionResponseSchema
+      })
     }
 
     closeForm(true)
@@ -279,7 +297,9 @@ async function deleteSession(session) {
   }
 
   try {
-    await api.delete(`/api/sessions/${session.id}`)
+    await api.delete(`/api/sessions/${session.id}`, {
+      responseSchema: okResponseSchema
+    })
     await loadSessions()
   } catch (error) {
     errorMessage.value = error.message || '删除记录失败'
