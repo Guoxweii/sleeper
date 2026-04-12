@@ -2,16 +2,33 @@ import fs from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
 import { DateTime } from 'luxon'
-import { config } from './config.js'
-import { hashPassword } from './password.js'
+import { config } from './config.ts'
+import { hashPassword } from './password.ts'
 
-function nowUtcIso() {
-  return DateTime.utc().toISO({ suppressMilliseconds: true })
+export type SleepDatabase = InstanceType<typeof Database>
+
+interface TableInfoRow {
+  name: string
+  notnull: number
+}
+
+interface CountRow {
+  count: number
+}
+
+export interface SeededAdminUser {
+  id: number
+  username: string
+  password: string
+}
+
+function nowUtcIso(): string {
+  return DateTime.utc().toISO({ suppressMilliseconds: true }) ?? ''
 }
 
 const MAX_TIME_ISO = '9999-12-31T23:59:59Z'
 
-export function createDb() {
+export function createDb(): SleepDatabase {
   const parentDir = path.dirname(config.dbPath)
   fs.mkdirSync(parentDir, { recursive: true })
 
@@ -22,7 +39,7 @@ export function createDb() {
   return db
 }
 
-export function migrate(db) {
+export function migrate(db: SleepDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,8 +89,8 @@ export function migrate(db) {
   migrateBoardsAddBirthDate(db)
 }
 
-function migrateBoardsAddBirthDate(db) {
-  const columns = db.prepare('PRAGMA table_info(boards)').all()
+function migrateBoardsAddBirthDate(db: SleepDatabase): void {
+  const columns = db.prepare('PRAGMA table_info(boards)').all() as TableInfoRow[]
   if (!columns.length) {
     return
   }
@@ -86,8 +103,8 @@ function migrateBoardsAddBirthDate(db) {
   db.exec('ALTER TABLE boards ADD COLUMN birth_date TEXT')
 }
 
-function migrateSleepSessionsAllowNullEndAt(db) {
-  const columns = db.prepare('PRAGMA table_info(sleep_sessions)').all()
+function migrateSleepSessionsAllowNullEndAt(db: SleepDatabase): void {
+  const columns = db.prepare('PRAGMA table_info(sleep_sessions)').all() as TableInfoRow[]
   if (!columns.length) {
     return
   }
@@ -126,9 +143,9 @@ function migrateSleepSessionsAllowNullEndAt(db) {
   migrateTx()
 }
 
-export function seedAdminUser(db) {
-  const existing = db.prepare('SELECT COUNT(*) AS count FROM users').get()
-  if (existing.count > 0) {
+export function seedAdminUser(db: SleepDatabase): SeededAdminUser | null {
+  const existing = db.prepare('SELECT COUNT(*) AS count FROM users').get() as CountRow | undefined
+  if ((existing?.count ?? 0) > 0) {
     return null
   }
 
@@ -146,9 +163,9 @@ export function seedAdminUser(db) {
   }
 }
 
-export function seedDefaultBoards(db) {
-  const existing = db.prepare('SELECT COUNT(*) AS count FROM boards').get()
-  if (existing.count > 0) {
+export function seedDefaultBoards(db: SleepDatabase): string[] {
+  const existing = db.prepare('SELECT COUNT(*) AS count FROM boards').get() as CountRow | undefined
+  if ((existing?.count ?? 0) > 0) {
     return []
   }
 
@@ -165,7 +182,13 @@ export function seedDefaultBoards(db) {
   return names
 }
 
-export function hasSessionOverlap(db, boardId, startAt, endAt, excludeId = null) {
+export function hasSessionOverlap(
+  db: SleepDatabase,
+  boardId: number,
+  startAt: string,
+  endAt: string | null,
+  excludeId: number | null = null
+): boolean {
   let sql = `
     SELECT id
     FROM sleep_sessions
@@ -174,7 +197,7 @@ export function hasSessionOverlap(db, boardId, startAt, endAt, excludeId = null)
       AND COALESCE(end_at, '${MAX_TIME_ISO}') > ?
   `
 
-  const params = [boardId, endAt, startAt]
+  const params: Array<number | string | null> = [boardId, endAt, startAt]
 
   if (excludeId !== null && excludeId !== undefined) {
     sql += ' AND id != ?'

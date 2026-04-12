@@ -1,19 +1,25 @@
 import { defineStore } from 'pinia'
-import { api } from '../lib/api'
-import { authResponseSchema, loginBodySchema, okResponseSchema } from '../../../shared/index.js'
+import { api } from '../lib/api.ts'
+import { authResponseSchema, loginBodySchema, okResponseSchema } from '../../../shared/index.ts'
+import type { User } from '../../../shared/index.ts'
+
+interface AuthState {
+  user: User | null
+  initialized: boolean
+}
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
+  state: (): AuthState => ({
     user: null,
     initialized: false
   }),
   getters: {
-    isAuthenticated(state) {
+    isAuthenticated(state): boolean {
       return Boolean(state.user)
     }
   },
   actions: {
-    async fetchMe() {
+    async fetchMe(): Promise<void> {
       try {
         const response = await api.get('/api/auth/me', {
           responseSchema: authResponseSchema
@@ -25,7 +31,7 @@ export const useAuthStore = defineStore('auth', {
         this.initialized = true
       }
     },
-    async login(username, password) {
+    async login(username: string, password: string): Promise<User> {
       const response = await api.post(
         '/api/auth/login',
         {
@@ -41,7 +47,7 @@ export const useAuthStore = defineStore('auth', {
       this.initialized = true
       return response.user
     },
-    async logout() {
+    async logout(): Promise<void> {
       try {
         await api.post('/api/auth/logout', undefined, {
           responseSchema: okResponseSchema

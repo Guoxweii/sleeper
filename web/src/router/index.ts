@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth.ts'
 import LoginPage from '../pages/LoginPage.vue'
 import BoardsPage from '../pages/BoardsPage.vue'
 import BoardRecordsPage from '../pages/BoardRecordsPage.vue'

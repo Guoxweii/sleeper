@@ -4,8 +4,8 @@
 
 ## 技术栈
 
-- 前端：Vue 3 + Vite + Pinia + Vue Router + Tailwind CSS
-- 后端：Node.js + Fastify
+- 前端：Vue 3 + Vite + TypeScript + Pinia + Vue Router + Tailwind CSS
+- 后端：Node.js + Fastify + TypeScript
 - 数据库：SQLite
 - 部署：Docker
 
@@ -35,8 +35,14 @@ npm run dev:web
 # 初始化数据库与默认账号/Board
 npm run db:init
 
+# 全量类型检查
+npm run typecheck
+
 # 构建前端
 npm run build
+
+# 后端 TypeScript 检查
+npm run build --workspace server
 
 # 生产启动（由 Fastify 提供前端静态资源）
 npm run start

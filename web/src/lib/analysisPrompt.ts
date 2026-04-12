@@ -1,8 +1,35 @@
 import { DateTime } from 'luxon'
-import { formatTypeLabel } from './time'
+import type { MonthlyAnalysis, WeeklyAnalysis } from '../../../shared/index.ts'
+import { formatTypeLabel } from './time.ts'
+
+type AnalysisScope = 'weekly' | 'monthly'
+type PromptAnalysis =
+  | (WeeklyAnalysis & {
+      period?: {
+        startDate?: string
+        endDate?: string
+        week?: string
+      }
+    })
+  | (MonthlyAnalysis & {
+      period?: {
+        startDate?: string
+        endDate?: string
+        month?: string
+      }
+    })
+
+interface PromptInput {
+  scope: AnalysisScope
+  boardName: string
+  boardBirthDate: string | null
+  analysis: PromptAnalysis
+  timezone: string
+}
+
 const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-function formatRecordDateTime(isoString, timezone) {
+function formatRecordDateTime(isoString: string | null | undefined, timezone: string): string {
   if (!isoString) {
     return '-'
   }
@@ -16,7 +43,7 @@ function formatRecordDateTime(isoString, timezone) {
   return `${dt.toFormat('yyyy-LL-dd HH:mm')} ${weekday}`.trim()
 }
 
-function formatSourceRecords(analysis, timezone) {
+function formatSourceRecords(analysis: PromptAnalysis | null | undefined, timezone: string): string[] {
   const rows = analysis?.sourceRecords || []
   if (!rows.length) {
     return ['- 当前统计范围内无可用记录']
@@ -29,7 +56,7 @@ function formatSourceRecords(analysis, timezone) {
   })
 }
 
-function resolvePeriodDates(analysis, timezone) {
+function resolvePeriodDates(analysis: PromptAnalysis | null | undefined, timezone: string) {
   const rangeStart = analysis?.range?.startAt
   const rangeEnd = analysis?.range?.endAt
 
@@ -52,16 +79,21 @@ function resolvePeriodDates(analysis, timezone) {
   }
 }
 
-function periodText(scope, analysis, timezone) {
+function periodText(scope: AnalysisScope, analysis: PromptAnalysis | null | undefined, timezone: string): string {
   const { startDate, endDate } = resolvePeriodDates(analysis, timezone)
 
   if (scope === 'weekly') {
-    return `周 ${analysis?.week || analysis?.period?.week || '-'}（${startDate} ~ ${endDate}）`
+    const legacyWeek = analysis?.period && 'week' in analysis.period ? analysis.period.week : '-'
+    const weekText = analysis && 'week' in analysis ? analysis.week : legacyWeek
+    return `周 ${weekText}（${startDate} ~ ${endDate}）`
   }
-  return `月 ${analysis?.month || analysis?.period?.month || '-'}（${startDate} ~ ${endDate}）`
+
+  const legacyMonth = analysis?.period && 'month' in analysis.period ? analysis.period.month : '-'
+  const monthText = analysis && 'month' in analysis ? analysis.month : legacyMonth
+  return `月 ${monthText}（${startDate} ~ ${endDate}）`
 }
 
-function calculateAgeText(boardBirthDate, timezone, referenceDate) {
+function calculateAgeText(boardBirthDate: string | null, timezone: string, referenceDate?: DateTime): string {
   if (!boardBirthDate) {
     return '未设置'
   }
@@ -87,7 +119,7 @@ function calculateAgeText(boardBirthDate, timezone, referenceDate) {
   return months > 0 ? `${years}岁${months}个月` : `${years}岁`
 }
 
-function buildAgeContext(analysis, boardBirthDate, timezone) {
+function buildAgeContext(analysis: PromptAnalysis, boardBirthDate: string | null, timezone: string) {
   const meta = analysis?.review?.meta || null
   if (meta?.age) {
     const ageText =
@@ -111,7 +143,7 @@ function buildAgeContext(analysis, boardBirthDate, timezone) {
   }
 }
 
-export function buildAiConsultPrompt({ scope, boardName, boardBirthDate, analysis, timezone }) {
+export function buildAiConsultPrompt({ scope, boardName, boardBirthDate, analysis, timezone }: PromptInput): string {
   if (!analysis) {
     return ''
   }
@@ -155,7 +187,7 @@ export function buildAiConsultPrompt({ scope, boardName, boardBirthDate, analysi
   return lines.join('\n')
 }
 
-export async function copyTextToClipboard(text) {
+export async function copyTextToClipboard(text: string): Promise<void> {
   if (!text) {
     throw new Error('empty text')
   }

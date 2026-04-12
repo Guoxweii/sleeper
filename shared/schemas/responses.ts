@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { isoDateSchema, isoDateTimeSchema, positiveIntSchema, sleepTypeSchema } from './base.js'
-import { monthlyAnalysisSchema, weeklyAnalysisSchema } from './analysis.js'
+import { isoDateSchema, isoDateTimeSchema, positiveIntSchema, sleepTypeSchema } from './base.ts'
+import { monthlyAnalysisSchema, weeklyAnalysisSchema } from './analysis.ts'
 
 export const errorResponseSchema = z
   .object({
@@ -100,3 +100,17 @@ export const monthlyAnalysisResponseSchema = z
     analysis: monthlyAnalysisSchema
   })
   .strict()
+
+export type ErrorResponse = z.output<typeof errorResponseSchema>
+export type OkResponse = z.output<typeof okResponseSchema>
+export type User = z.output<typeof userSchema>
+export type Board = z.output<typeof boardSchema>
+export type Session = z.output<typeof sessionSchema>
+export type Pagination = z.output<typeof paginationSchema>
+export type AuthResponse = z.output<typeof authResponseSchema>
+export type BoardsResponse = z.output<typeof boardsResponseSchema>
+export type BoardResponse = z.output<typeof boardResponseSchema>
+export type SessionResponse = z.output<typeof sessionResponseSchema>
+export type SessionsResponse = z.output<typeof sessionsResponseSchema>
+export type WeeklyAnalysisResponse = z.output<typeof weeklyAnalysisResponseSchema>
+export type MonthlyAnalysisResponse = z.output<typeof monthlyAnalysisResponseSchema>

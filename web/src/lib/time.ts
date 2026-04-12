@@ -1,19 +1,49 @@
 import { DateTime } from 'luxon'
+import type { SleepType } from '../../../shared/index.ts'
+
+export interface SessionTypeOption {
+  value: SleepType
+  label: string
+}
+
+export interface IsoWeekParts {
+  weekYear: number
+  weekNumber: number
+}
+
+export interface IsoMonthParts {
+  year: number
+  month: number
+}
+
+export interface IsoWeekOption {
+  value: string
+  weekNumber: number
+  rangeText: string
+  label: string
+}
+
+export interface MonthOption {
+  value: string
+  month: number
+  rangeText: string
+  label: string
+}
 
 const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-export const SESSION_TYPE_OPTIONS = [
+export const SESSION_TYPE_OPTIONS: SessionTypeOption[] = [
   { value: 'night', label: '夜间睡眠' },
   { value: 'nap', label: '午睡' },
   { value: 'fragmented', label: '零星睡眠' }
 ]
 
-export function formatTypeLabel(type) {
+export function formatTypeLabel(type: SleepType): string {
   const found = SESSION_TYPE_OPTIONS.find((option) => option.value === type)
   return found ? found.label : type
 }
 
-export function toDatetimeLocalInput(isoString) {
+export function toDatetimeLocalInput(isoString: string | null | undefined): string {
   if (!isoString) {
     return ''
   }
@@ -26,7 +56,7 @@ export function toDatetimeLocalInput(isoString) {
   return dt.toFormat("yyyy-LL-dd'T'HH:mm")
 }
 
-export function formatDateTime(isoString, fallback = '-') {
+export function formatDateTime(isoString: string | null | undefined, fallback = '-'): string {
   if (!isoString) {
     return fallback
   }
@@ -39,7 +69,7 @@ export function formatDateTime(isoString, fallback = '-') {
   return dt.toFormat('MM-dd HH:mm')
 }
 
-export function formatDateTimeWithWeekday(isoString, fallback = '-') {
+export function formatDateTimeWithWeekday(isoString: string | null | undefined, fallback = '-'): string {
   if (!isoString) {
     return fallback
   }
@@ -53,7 +83,7 @@ export function formatDateTimeWithWeekday(isoString, fallback = '-') {
   return `${weekday} ${dt.toFormat('MM-dd HH:mm')}`.trim()
 }
 
-export function formatDuration(minutes) {
+export function formatDuration(minutes: number): string {
   const safe = Math.max(Math.round(Number(minutes) || 0), 0)
   const hours = Math.floor(safe / 60)
   const remainMinutes = safe % 60
@@ -69,7 +99,7 @@ export function formatDuration(minutes) {
   return `${remainMinutes}分`
 }
 
-export function minutesBetween(startIso, endIso) {
+export function minutesBetween(startIso: string, endIso: string): number {
   const start = DateTime.fromISO(startIso, { zone: 'utc' })
   const end = DateTime.fromISO(endIso, { zone: 'utc' })
   if (!start.isValid || !end.isValid) {
@@ -78,17 +108,17 @@ export function minutesBetween(startIso, endIso) {
   return Math.max(0, Math.round(end.diff(start, 'minutes').minutes))
 }
 
-export function currentIsoWeek() {
+export function currentIsoWeek(): string {
   const now = DateTime.local()
   return `${now.weekYear}-W${String(now.weekNumber).padStart(2, '0')}`
 }
 
-export function currentIsoMonth() {
+export function currentIsoMonth(): string {
   const now = DateTime.local()
   return `${now.year}-${String(now.month).padStart(2, '0')}`
 }
 
-export function parseIsoWeekValue(value) {
+export function parseIsoWeekValue(value: string | null | undefined): IsoWeekParts | null {
   const match = /^([0-9]{4})-W([0-9]{2})$/.exec(value || '')
   if (!match) {
     return null
@@ -100,7 +130,7 @@ export function parseIsoWeekValue(value) {
   }
 }
 
-export function parseIsoMonthValue(value) {
+export function parseIsoMonthValue(value: string | null | undefined): IsoMonthParts | null {
   const match = /^([0-9]{4})-([0-9]{2})$/.exec(value || '')
   if (!match) {
     return null
@@ -112,7 +142,7 @@ export function parseIsoMonthValue(value) {
   }
 }
 
-export function buildRecentYears(baseYear, count = 3) {
+export function buildRecentYears(baseYear: number, count = 3): number[] {
   if (!Number.isFinite(baseYear) || count < 1) {
     return []
   }
@@ -120,7 +150,7 @@ export function buildRecentYears(baseYear, count = 3) {
   return Array.from({ length: count }, (_, index) => baseYear - index)
 }
 
-export function buildIsoWeekOptions(weekYear) {
+export function buildIsoWeekOptions(weekYear: number): IsoWeekOption[] {
   if (!Number.isFinite(weekYear)) {
     return []
   }
@@ -166,7 +196,7 @@ export function buildIsoWeekOptions(weekYear) {
   return options
 }
 
-export function buildMonthOptions(year) {
+export function buildMonthOptions(year: number): MonthOption[] {
   if (!Number.isFinite(year)) {
     return []
   }
@@ -201,7 +231,7 @@ export function buildMonthOptions(year) {
   })
 }
 
-export function formatIsoWeekSummary(value) {
+export function formatIsoWeekSummary(value: string): string {
   const parsed = parseIsoWeekValue(value)
   if (!parsed) {
     return ''
@@ -215,7 +245,7 @@ export function formatIsoWeekSummary(value) {
   return `${parsed.weekYear} 年第 ${parsed.weekNumber} 周 · ${match.rangeText}`
 }
 
-export function formatIsoMonthSummary(value) {
+export function formatIsoMonthSummary(value: string): string {
   const parsed = parseIsoMonthValue(value)
   if (!parsed) {
     return ''

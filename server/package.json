@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
-    "db:init": "node scripts/init-db.js",
-    "build": "node -e \"console.log('Server uses plain JS, no build step')\""
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "db:init": "tsx scripts/init-db.ts",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@fastify/cookie": "^8.3.0",
@@ -16,6 +17,7 @@
     "better-sqlite3": "^9.6.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
-    "luxon": "^3.5.0"
+    "luxon": "^3.5.0",
+    "tsx": "^4.20.6"
   }
 }

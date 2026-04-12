@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-function isValidTimeZone(value) {
+function isValidTimeZone(value: string) {
   try {
     Intl.DateTimeFormat('zh-CN', { timeZone: value }).format(new Date())
     return true
@@ -74,3 +74,19 @@ export const reviewStatusSchema = z.enum(['excellent', 'good', 'attention', 'poo
 export const reviewDimensionKeySchema = z.enum(['duration', 'timing', 'regularity', 'structure'])
 
 export const reviewProfileIdSchema = z.enum(['infant', 'toddler', 'preschool', 'school_age', 'teen', 'adult'])
+
+export type NullableTrimmedString = z.output<typeof nullableTrimmedStringSchema>
+export type NullableIsoDateInput = z.output<typeof nullableIsoDateInputSchema>
+export type NullableDateTimeInput = z.output<typeof nullableDateTimeInputSchema>
+export type PositiveInt = z.output<typeof positiveIntSchema>
+export type PositiveIntLike = z.output<typeof positiveIntLikeSchema>
+export type IsoDate = z.output<typeof isoDateSchema>
+export type IsoWeek = z.output<typeof isoWeekSchema>
+export type IsoMonth = z.output<typeof isoMonthSchema>
+export type IsoDateTime = z.output<typeof isoDateTimeSchema>
+export type Clock = z.output<typeof clockSchema>
+export type Timezone = z.output<typeof timezoneSchema>
+export type SleepType = z.output<typeof sleepTypeSchema>
+export type ReviewStatus = z.output<typeof reviewStatusSchema>
+export type ReviewDimensionKey = z.output<typeof reviewDimensionKeySchema>
+export type ReviewProfileId = z.output<typeof reviewProfileIdSchema>

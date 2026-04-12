@@ -1,25 +1,26 @@
-<script setup>
+<script setup lang="ts">
 import { DateTime } from 'luxon'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from '../lib/api'
+import { api } from '../lib/api.ts'
 import {
   boardResponseSchema,
   boardsResponseSchema,
   createBoardBodySchema,
   okResponseSchema,
   updateBoardBodySchema
-} from '../../../shared/index.js'
-import { useAuthStore } from '../stores/auth'
+} from '../../../shared/index.ts'
+import type { Board } from '../../../shared/index.ts'
+import { useAuthStore } from '../stores/auth.ts'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const boards = ref([])
+const boards = ref<Board[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const formVisible = ref(false)
-const editingBoardId = ref(null)
+const editingBoardId = ref<Board['id'] | null>(null)
 const errorMessage = ref('')
 
 const form = reactive({
@@ -28,12 +29,12 @@ const form = reactive({
   birthDate: ''
 })
 
-function formatUpdated(value) {
+function formatUpdated(value: string): string {
   const dt = DateTime.fromISO(value, { zone: 'utc' }).toLocal()
   return dt.isValid ? dt.toFormat('MM-dd HH:mm') : '-'
 }
 
-function formatAgeFromBirthDate(value) {
+function formatAgeFromBirthDate(value: string | null): string {
   if (!value) {
     return ''
   }
@@ -54,7 +55,7 @@ function formatAgeFromBirthDate(value) {
   return months > 0 ? `${years}岁${months}个月` : `${years}岁`
 }
 
-async function loadBoards() {
+async function loadBoards(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
   try {
@@ -81,7 +82,7 @@ function openCreate() {
   resetForm()
 }
 
-function openEdit(board) {
+function openEdit(board: Board): void {
   formVisible.value = true
   editingBoardId.value = board.id
   form.name = board.name
@@ -94,7 +95,7 @@ function closeForm() {
   resetForm()
 }
 
-async function saveBoard() {
+async function saveBoard(): Promise<void> {
   saving.value = true
   errorMessage.value = ''
 
@@ -127,7 +128,7 @@ async function saveBoard() {
   }
 }
 
-async function deleteBoard(board) {
+async function deleteBoard(board: Board): Promise<void> {
   if (!window.confirm(`确认删除「${board.name}」吗？该 Board 下记录会一并删除。`)) {
     return
   }
@@ -142,7 +143,7 @@ async function deleteBoard(board) {
   }
 }
 
-async function logout() {
+async function logout(): Promise<void> {
   await auth.logout()
   router.replace('/login')
 }

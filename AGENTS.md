@@ -56,7 +56,8 @@ npm run dev:api
 
 - Main build: `npm run build` (builds frontend workspace)
 - Frontend only: `npm run build --workspace web`
-- Backend placeholder build: `npm run build --workspace server`
+- Backend TS check: `npm run build --workspace server`
+- Full typecheck: `npm run typecheck`
 
 ### Lint
 
@@ -72,13 +73,12 @@ npm run dev:api
 
 Since no test runner exists, use targeted checks as a single-test substitute:
 
-- Backend syntax check (single file):
-  - `node --check server/src/index.js`
-  - `node --check server/src/analysis.js`
+- Backend TypeScript check:
+  - `npm run build --workspace server`
 - Frontend sanity check:
   - `npm run build --workspace web`
 - Optional module smoke check (inside `server/`):
-  - `node -e "import('./src/analysis.js')"`
+  - `npx tsx ./src/analysis.ts`
 
 If a real test framework is added later, update this section with exact single-test commands.
 
@@ -100,7 +100,7 @@ Supported deploy env vars:
 
 ### Language and Modules
 
-- JavaScript only (no TypeScript in current codebase).
+- TypeScript for app code and Vue SFC scripts.
 - Use ESM syntax (`import`/`export`) everywhere.
 - Prefer `node:` prefix for Node built-in imports.
 
@@ -130,7 +130,7 @@ Supported deploy env vars:
 
 ### Frontend (Vue) Patterns
 
-- Use `<script setup>`.
+- Use `<script setup lang="ts">` when a page/component has script logic.
 - Use `ref`, `reactive`, `computed` for state.
 - Use `watch` for route/filter-triggered reloads.
 - Put reusable formatting/data helpers under `web/src/lib/*`.
@@ -138,7 +138,7 @@ Supported deploy env vars:
 
 ### Backend (Fastify) Patterns
 
-- Keep routes in `server/src/index.js` unless refactor is explicitly requested.
+- Keep routes in `server/src/index.ts` unless refactor is explicitly requested.
 - Validate inputs early; return `400` with clear messages.
 - Use `reply.code(...).send(...)` for explicit status control.
 - Wrap user-input-driven logic in `try/catch`.
@@ -161,7 +161,7 @@ Supported deploy env vars:
 
 - Always use prepared statements with placeholders (`?`).
 - Never construct SQL by concatenating user input.
-- Add schema evolution via explicit migration functions in `server/src/db.js`.
+- Add schema evolution via explicit migration functions in `server/src/db.ts`.
 - Keep migrations backward compatible for existing DB files.
 
 ## 8) Agent Working Rules

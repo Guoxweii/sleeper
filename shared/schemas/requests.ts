@@ -8,7 +8,7 @@ import {
   positiveIntLikeSchema,
   sleepTypeSchema,
   timezoneSchema
-} from './base.js'
+} from './base.ts'
 
 export const idParamsSchema = z
   .object({
@@ -86,3 +86,13 @@ export const monthlyAnalysisQuerySchema = z
     tz: timezoneSchema.optional()
   })
   .strict()
+
+export type IdParams = z.output<typeof idParamsSchema>
+export type LoginBody = z.output<typeof loginBodySchema>
+export type CreateBoardBody = z.output<typeof createBoardBodySchema>
+export type UpdateBoardBody = z.output<typeof updateBoardBodySchema>
+export type ListSessionsQuery = z.output<typeof listSessionsQuerySchema>
+export type CreateSessionBody = z.output<typeof createSessionBodySchema>
+export type UpdateSessionBody = z.output<typeof updateSessionBodySchema>
+export type WeeklyAnalysisQuery = z.output<typeof weeklyAnalysisQuerySchema>
+export type MonthlyAnalysisQuery = z.output<typeof monthlyAnalysisQuerySchema>
