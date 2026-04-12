@@ -168,7 +168,10 @@ function barHeight(minutes) {
 
 watch(monthYear, (nextYear) => {
   const currentMonthNumber = parseIsoMonthValue(month.value)?.month || 1
-  const nextValue = `${nextYear}-${String(currentMonthNumber).padStart(2, '0')}`
+  const currentYearMonth = parseIsoMonthValue(currentIsoMonth())
+  const nextMonthNumber =
+    nextYear === currentYearMonth?.year ? Math.min(currentMonthNumber, currentYearMonth.month) : currentMonthNumber
+  const nextValue = `${nextYear}-${String(nextMonthNumber).padStart(2, '0')}`
 
   if (nextValue !== month.value) {
     month.value = nextValue

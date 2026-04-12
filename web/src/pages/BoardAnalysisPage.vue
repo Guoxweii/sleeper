@@ -161,8 +161,10 @@ function barHeight(minutes) {
 
 watch(weekYear, (nextYear) => {
   const currentWeekNumber = parseIsoWeekValue(week.value)?.weekNumber || 1
+  const currentWeekYear = parseIsoWeekValue(currentIsoWeek())?.weekYear || null
   const options = weekOptions.value
-  const fallbackOption = options[options.length - 1] || null
+  const fallbackOption =
+    nextYear === currentWeekYear ? options[0] || null : options[options.length - 1] || null
   const nextOption = options.find((item) => item.weekNumber === currentWeekNumber) || fallbackOption
 
   if (nextOption && nextOption.value !== week.value) {

@@ -125,9 +125,11 @@ export function buildIsoWeekOptions(weekYear) {
     return []
   }
 
+  const now = DateTime.local()
+  const maxWeekNumber = weekYear === now.weekYear ? now.weekNumber : 53
   const options = []
 
-  for (let weekNumber = 1; weekNumber <= 53; weekNumber += 1) {
+  for (let weekNumber = 1; weekNumber <= maxWeekNumber; weekNumber += 1) {
     const start = DateTime.fromObject(
       {
         weekYear,
@@ -157,6 +159,10 @@ export function buildIsoWeekOptions(weekYear) {
     })
   }
 
+  if (weekYear === now.weekYear) {
+    options.reverse()
+  }
+
   return options
 }
 
@@ -165,7 +171,10 @@ export function buildMonthOptions(year) {
     return []
   }
 
-  return Array.from({ length: 12 }, (_, index) => {
+  const now = DateTime.local()
+  const maxMonth = year === now.year ? now.month : 12
+
+  return Array.from({ length: maxMonth }, (_, index) => {
     const month = index + 1
     const start = DateTime.fromObject(
       {
