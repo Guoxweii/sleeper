@@ -31,41 +31,93 @@ const copyMessage = ref('')
 const copyingPrompt = ref(false)
 const availableMonthYears = buildRecentYears(initialMonthParts?.year || new Date().getFullYear())
 
-async function loadBoard() {
-  const response = await api.get(`/api/boards/${boardId.value}`)
-  board.value = response.board
+let latestPageLoadId = 0
+let latestAnalysisLoadId = 0
+
+async function fetchBoardData(targetBoardId) {
+  return api.get(`/api/boards/${targetBoardId}`)
 }
 
-async function loadAnalysis() {
-  const response = await api.get(
-    `/api/boards/${boardId.value}/analysis/monthly?month=${encodeURIComponent(month.value)}&tz=${encodeURIComponent(timezone)}`
+async function fetchAnalysisData(targetBoardId, targetMonth) {
+  return api.get(
+    `/api/boards/${targetBoardId}/analysis/monthly?month=${encodeURIComponent(targetMonth)}&tz=${encodeURIComponent(timezone)}`
   )
-  analysis.value = response.analysis
+}
+
+function isCurrentLoad(loadId, targetBoardId, targetMonth) {
+  return loadId === latestAnalysisLoadId && targetBoardId === boardId.value && targetMonth === month.value
 }
 
 async function loadPage() {
+  const pageLoadId = ++latestPageLoadId
+  const analysisLoadId = ++latestAnalysisLoadId
+  const targetBoardId = boardId.value
+  const targetMonth = month.value
   loading.value = true
   errorMessage.value = ''
   copyMessage.value = ''
+  board.value = null
+  analysis.value = null
+
   try {
-    await Promise.all([loadBoard(), loadAnalysis()])
+    const [boardResponse, analysisResponse] = await Promise.all([
+      fetchBoardData(targetBoardId),
+      fetchAnalysisData(targetBoardId, targetMonth)
+    ])
+
+    if (pageLoadId === latestPageLoadId && targetBoardId === boardId.value) {
+      board.value = boardResponse.board
+    }
+
+    if (isCurrentLoad(analysisLoadId, targetBoardId, targetMonth)) {
+      analysis.value = analysisResponse.analysis
+    }
   } catch (error) {
+    if (
+      pageLoadId !== latestPageLoadId ||
+      !isCurrentLoad(analysisLoadId, targetBoardId, targetMonth) ||
+      targetBoardId !== boardId.value
+    ) {
+      return
+    }
+
+    board.value = null
+    analysis.value = null
     errorMessage.value = error.message || '加载月分析失败'
   } finally {
-    loading.value = false
+    if (pageLoadId === latestPageLoadId && analysisLoadId === latestAnalysisLoadId) {
+      loading.value = false
+    }
   }
 }
 
 async function reloadAnalysisOnly() {
+  const loadId = ++latestAnalysisLoadId
+  const targetBoardId = boardId.value
+  const targetMonth = month.value
   loading.value = true
   errorMessage.value = ''
   copyMessage.value = ''
+  analysis.value = null
+
   try {
-    await loadAnalysis()
+    const response = await fetchAnalysisData(targetBoardId, targetMonth)
+    if (!isCurrentLoad(loadId, targetBoardId, targetMonth)) {
+      return
+    }
+
+    analysis.value = response.analysis
   } catch (error) {
+    if (!isCurrentLoad(loadId, targetBoardId, targetMonth)) {
+      return
+    }
+
+    analysis.value = null
     errorMessage.value = error.message || '加载月分析失败'
   } finally {
-    loading.value = false
+    if (loadId === latestAnalysisLoadId) {
+      loading.value = false
+    }
   }
 }
 

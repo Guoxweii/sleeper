@@ -41,12 +41,19 @@ function sessionDto(row) {
   }
 }
 
-function parseTimeInput(value, fieldName) {
+function parseTimeInput(value, fieldName, timezone = config.defaultTimezone) {
   if (!value || typeof value !== 'string') {
     throw new Error(`${fieldName} 不能为空`)
   }
 
-  const dt = DateTime.fromISO(value, { setZone: true })
+  const raw = value.trim()
+  const zoneNow = DateTime.now().setZone(timezone)
+  if (!zoneNow.isValid) {
+    throw new Error('timezone 参数无效，请传入 IANA 格式时区，例如 Asia/Shanghai')
+  }
+
+  const hasExplicitZone = /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(raw)
+  const dt = hasExplicitZone ? DateTime.fromISO(raw, { setZone: true }) : DateTime.fromISO(raw, { zone: timezone })
   if (!dt.isValid) {
     throw new Error(`${fieldName} 时间格式无效`)
   }
@@ -54,12 +61,12 @@ function parseTimeInput(value, fieldName) {
   return dt.toUTC().toISO({ suppressMilliseconds: true })
 }
 
-function parseOptionalTimeInput(value, fieldName) {
+function parseOptionalTimeInput(value, fieldName, timezone = config.defaultTimezone) {
   if (value === undefined || value === null || value === '') {
     return null
   }
 
-  return parseTimeInput(value, fieldName)
+  return parseTimeInput(value, fieldName, timezone)
 }
 
 function parseBirthDateInput(value) {
@@ -439,9 +446,10 @@ app.post('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request
   }
 
   try {
+    const timezone = String(request.body?.timezone || config.defaultTimezone)
     const type = normalizeType(request.body?.type)
-    const startAt = parseTimeInput(request.body?.startAt, 'startAt')
-    const endAt = parseOptionalTimeInput(request.body?.endAt, 'endAt')
+    const startAt = parseTimeInput(request.body?.startAt, 'startAt', timezone)
+    const endAt = parseOptionalTimeInput(request.body?.endAt, 'endAt', timezone)
     const note = cleanNote(request.body?.note)
 
     validateRange(startAt, endAt)
@@ -480,16 +488,17 @@ app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, repl
   }
 
   try {
+    const timezone = String(request.body?.timezone || config.defaultTimezone)
     const type =
       request.body?.type === undefined ? existing.type : normalizeType(request.body?.type)
     const startAt =
       request.body?.startAt === undefined
         ? existing.start_at
-        : parseTimeInput(request.body?.startAt, 'startAt')
+        : parseTimeInput(request.body?.startAt, 'startAt', timezone)
     const endAt =
       request.body?.endAt === undefined
         ? existing.end_at
-        : parseOptionalTimeInput(request.body?.endAt, 'endAt')
+        : parseOptionalTimeInput(request.body?.endAt, 'endAt', timezone)
     const note = request.body?.note === undefined ? existing.note || '' : cleanNote(request.body?.note)
 
     validateRange(startAt, endAt)
