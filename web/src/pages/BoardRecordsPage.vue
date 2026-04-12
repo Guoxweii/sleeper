@@ -1,8 +1,8 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
-import { api } from '../lib/api'
+import { api } from '../lib/api.ts'
 import {
   boardResponseSchema,
   createSessionBodySchema,
@@ -10,7 +10,8 @@ import {
   sessionResponseSchema,
   sessionsResponseSchema,
   updateSessionBodySchema
-} from '../../../shared/index.js'
+} from '../../../shared/index.ts'
+import type { Board, Pagination, Session, SessionsResponse, SleepType } from '../../../shared/index.ts'
 import {
   SESSION_TYPE_OPTIONS,
   formatDateTimeWithWeekday,
@@ -18,26 +19,40 @@ import {
   formatTypeLabel,
   minutesBetween,
   toDatetimeLocalInput
-} from '../lib/time'
+} from '../lib/time.ts'
+
+interface SessionsRequestSnapshot {
+  boardId: number
+  filterType: SleepType | 'all'
+  page: number
+  pageSize: number
+}
+
+interface SessionForm {
+  type: SleepType
+  startAt: string
+  endAt: string
+  note: string
+}
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
 
-const board = ref(null)
-const sessions = ref([])
+const board = ref<Board | null>(null)
+const sessions = ref<Session[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const sessionsLoading = ref(false)
 const errorMessage = ref('')
 
-const filterType = ref('all')
+const filterType = ref<SleepType | 'all'>('all')
 const page = ref(1)
 const pageSize = ref(20)
 const formVisible = ref(false)
-const editingSessionId = ref(null)
+const editingSessionId = ref<Session['id'] | null>(null)
 
-const pagination = reactive({
+const pagination = reactive<Pagination>({
   page: 1,
   pageSize: 20,
   total: 0,
@@ -46,7 +61,7 @@ const pagination = reactive({
   hasNext: false
 })
 
-const form = reactive({
+const form = reactive<SessionForm>({
   type: 'night',
   startAt: '',
   endAt: '',
@@ -56,17 +71,17 @@ const form = reactive({
 let latestPageLoadId = 0
 let latestSessionsLoadId = 0
 
-function typeBadgeClass(type) {
+function typeBadgeClass(type: SleepType): string {
   if (type === 'night') return 'bg-cyan-600 text-white'
   if (type === 'nap') return 'bg-emerald-500 text-white'
   return 'bg-amber-400 text-amber-900'
 }
 
-function isOngoing(session) {
+function isOngoing(session: Session): boolean {
   return !session.endAt
 }
 
-function sessionCardClass(session) {
+function sessionCardClass(session: Session): string {
   const classes = []
 
   if (isOngoing(session)) {
@@ -76,7 +91,7 @@ function sessionCardClass(session) {
   return classes.join(' ')
 }
 
-function setDefaultForm() {
+function setDefaultForm(): void {
   const now = new Date()
   const start = new Date(now.getTime() - 60 * 60 * 1000)
 
@@ -90,14 +105,14 @@ function setDefaultForm() {
   form.note = ''
 }
 
-function sessionDurationLabel(session) {
+function sessionDurationLabel(session: Session): string {
   if (!session.endAt) {
     return '进行中'
   }
   return formatDuration(minutesBetween(session.startAt, session.endAt))
 }
 
-function resetPagination(currentPage = 1, currentPageSize = pageSize.value) {
+function resetPagination(currentPage = 1, currentPageSize = pageSize.value): void {
   pagination.page = currentPage
   pagination.pageSize = currentPageSize
   pagination.total = 0
@@ -106,10 +121,10 @@ function resetPagination(currentPage = 1, currentPageSize = pageSize.value) {
   pagination.hasNext = false
 }
 
-function applySessionsResponse(response, fallbackPage, fallbackPageSize) {
+function applySessionsResponse(response: SessionsResponse, fallbackPage: number, fallbackPageSize: number): void {
   sessions.value = response.sessions || []
 
-  const meta = response.pagination || {}
+  const meta = response.pagination
   pagination.page = meta.page || fallbackPage
   pagination.pageSize = meta.pageSize || fallbackPageSize
   pagination.total = meta.total || 0
@@ -121,7 +136,7 @@ function applySessionsResponse(response, fallbackPage, fallbackPageSize) {
   pageSize.value = pagination.pageSize
 }
 
-function createSessionsRequestSnapshot() {
+function createSessionsRequestSnapshot(): SessionsRequestSnapshot {
   return {
     boardId: boardId.value,
     filterType: filterType.value,
@@ -130,7 +145,7 @@ function createSessionsRequestSnapshot() {
   }
 }
 
-function isCurrentSessionsRequest(loadId, snapshot) {
+function isCurrentSessionsRequest(loadId: number, snapshot: SessionsRequestSnapshot): boolean {
   return (
     loadId === latestSessionsLoadId &&
     snapshot.boardId === boardId.value &&
@@ -140,13 +155,13 @@ function isCurrentSessionsRequest(loadId, snapshot) {
   )
 }
 
-async function fetchBoardData(targetBoardId) {
+async function fetchBoardData(targetBoardId: number) {
   return api.get(`/api/boards/${targetBoardId}`, {
     responseSchema: boardResponseSchema
   })
 }
 
-async function fetchSessionsData(snapshot) {
+async function fetchSessionsData(snapshot: SessionsRequestSnapshot) {
   const query = new URLSearchParams()
   if (snapshot.filterType !== 'all') {
     query.set('type', snapshot.filterType)
@@ -159,7 +174,7 @@ async function fetchSessionsData(snapshot) {
   })
 }
 
-async function loadSessions() {
+async function loadSessions(): Promise<void> {
   const loadId = ++latestSessionsLoadId
   const snapshot = createSessionsRequestSnapshot()
   sessionsLoading.value = true
@@ -186,7 +201,7 @@ async function loadSessions() {
   }
 }
 
-async function loadPage() {
+async function loadPage(): Promise<void> {
   const loadId = ++latestPageLoadId
   const sessionsLoadId = ++latestSessionsLoadId
   const snapshot = createSessionsRequestSnapshot()
@@ -239,7 +254,7 @@ function openCreate() {
   setDefaultForm()
 }
 
-function openEdit(session) {
+function openEdit(session: Session): void {
   formVisible.value = true
   editingSessionId.value = session.id
   form.type = session.type
@@ -248,7 +263,7 @@ function openEdit(session) {
   form.note = session.note || ''
 }
 
-function closeForm(force = false) {
+function closeFormInternal(force = false): void {
   if (saving.value && !force) {
     return
   }
@@ -257,7 +272,11 @@ function closeForm(force = false) {
   editingSessionId.value = null
 }
 
-async function submitForm() {
+function closeForm(): void {
+  closeFormInternal(false)
+}
+
+async function submitForm(): Promise<void> {
   saving.value = true
   errorMessage.value = ''
 
@@ -282,7 +301,7 @@ async function submitForm() {
       })
     }
 
-    closeForm(true)
+    closeFormInternal(true)
     await loadSessions()
   } catch (error) {
     errorMessage.value = error.message || '保存记录失败'
@@ -291,7 +310,7 @@ async function submitForm() {
   }
 }
 
-async function deleteSession(session) {
+async function deleteSession(session: Session): Promise<void> {
   if (!window.confirm('确认删除这条记录吗？')) {
     return
   }
@@ -306,7 +325,7 @@ async function deleteSession(session) {
   }
 }
 
-async function changePage(nextPage) {
+async function changePage(nextPage: number): Promise<void> {
   if (nextPage < 1 || nextPage === page.value) {
     return
   }

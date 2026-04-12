@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import { z } from 'zod'
-import { timezoneSchema } from '../../shared/index.js'
+import { timezoneSchema } from '../../shared/index.ts'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const serverRoot = path.resolve(currentDir, '..')

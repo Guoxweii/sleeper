@@ -1,16 +1,14 @@
-<script setup>
-const props = defineProps({
-  boardId: {
-    type: [String, Number],
-    required: true
-  },
-  active: {
-    type: String,
-    required: true
-  }
+<script setup lang="ts">
+defineOptions({
+  name: 'BoardTabs'
 })
 
-function tabClass(current) {
+const props = defineProps<{
+  boardId: string | number
+  active: 'records' | 'analysis' | 'analysis-monthly'
+}>()
+
+function tabClass(current: string): string {
   return props.active === current
     ? 'bg-primary text-white shadow-sm'
     : 'bg-white/60 text-cyan-900 hover:bg-white'

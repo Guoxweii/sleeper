@@ -4,13 +4,13 @@ const ALGORITHM = 'sha512'
 const ITERATIONS = 120000
 const KEY_LENGTH = 64
 
-export function hashPassword(password) {
+export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('base64')
   const hash = pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, ALGORITHM).toString('base64')
   return `pbkdf2$${ITERATIONS}$${salt}$${hash}`
 }
 
-export function verifyPassword(password, passwordHash) {
+export function verifyPassword(password: string, passwordHash: string | null | undefined): boolean {
   if (!passwordHash || typeof passwordHash !== 'string') {
     return false
   }

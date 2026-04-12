@@ -1,4 +1,22 @@
-import { errorResponseSchema } from '../../../shared/index.js'
+import { z } from 'zod'
+import { errorResponseSchema } from '../../../shared/index.ts'
+
+type ApiSchema = z.ZodTypeAny | undefined
+
+type SchemaOutput<TSchema extends ApiSchema> = TSchema extends z.ZodTypeAny ? z.output<TSchema> : unknown
+
+interface RequestOptions<TBodySchema extends ApiSchema = undefined, TResponseSchema extends ApiSchema = undefined> {
+  method?: string
+  body?: unknown
+  bodySchema?: TBodySchema
+  responseSchema?: TResponseSchema
+  headers?: HeadersInit
+}
+
+interface ApiError extends Error {
+  status?: number
+  cause?: unknown
+}
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -15,7 +33,7 @@ const CLIENT_FIELD_LABELS = {
   timezone: '时区'
 }
 
-function clientFieldLabel(path) {
+function clientFieldLabel(path: PropertyKey[]): string {
   const target = path[path.length - 1]
   if (typeof target === 'string' && CLIENT_FIELD_LABELS[target]) {
     return CLIENT_FIELD_LABELS[target]
@@ -24,7 +42,7 @@ function clientFieldLabel(path) {
   return '请求数据'
 }
 
-function formatClientValidationError(error, fallbackMessage = '请求数据格式无效') {
+function formatClientValidationError(error: z.ZodError, fallbackMessage = '请求数据格式无效'): string {
   const issue = error.issues?.[0]
   if (!issue) {
     return fallbackMessage
@@ -63,37 +81,44 @@ function formatClientValidationError(error, fallbackMessage = '请求数据格�
   return issue.message || fallbackMessage
 }
 
-function parseBodyWithSchema(schema, payload) {
+function parseBodyWithSchema<TSchema extends ApiSchema>(schema: TSchema, payload: unknown): SchemaOutput<TSchema> {
   if (!schema) {
-    return payload
+    return payload as SchemaOutput<TSchema>
   }
 
   const result = schema.safeParse(payload)
   if (!result.success) {
-    const error = new Error(formatClientValidationError(result.error))
+    const error: ApiError = new Error(formatClientValidationError(result.error))
     error.cause = result.error
     throw error
   }
 
-  return result.data
+  return result.data as SchemaOutput<TSchema>
 }
 
-function parseResponseWithSchema(schema, payload, fallbackMessage) {
+function parseResponseWithSchema<TSchema extends ApiSchema>(
+  schema: TSchema,
+  payload: unknown,
+  fallbackMessage: string
+): SchemaOutput<TSchema> {
   if (!schema) {
-    return payload
+    return payload as SchemaOutput<TSchema>
   }
 
   const result = schema.safeParse(payload)
   if (!result.success) {
-    const error = new Error(fallbackMessage)
+    const error: ApiError = new Error(fallbackMessage)
     error.cause = result.error
     throw error
   }
 
-  return result.data
+  return result.data as SchemaOutput<TSchema>
 }
 
-async function request(path, options = {}) {
+async function request<TBodySchema extends ApiSchema = undefined, TResponseSchema extends ApiSchema = undefined>(
+  path: string,
+  options: RequestOptions<TBodySchema, TResponseSchema> = {}
+): Promise<SchemaOutput<TResponseSchema>> {
   const method = options.method || 'GET'
   const body = parseBodyWithSchema(options.bodySchema, options.body)
   const headers = {
@@ -113,7 +138,7 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const parsedError = errorResponseSchema.safeParse(payload)
-    const error = new Error(parsedError.success ? parsedError.data.message : '请求失败')
+    const error: ApiError = new Error(parsedError.success ? parsedError.data.message : '请求失败')
     error.status = response.status
     throw error
   }
@@ -122,16 +147,30 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  get(path, options = {}) {
+  get<TResponseSchema extends ApiSchema = undefined>(
+    path: string,
+    options: RequestOptions<undefined, TResponseSchema> = {}
+  ): Promise<SchemaOutput<TResponseSchema>> {
     return request(path, options)
   },
-  post(path, body, options = {}) {
+  post<TBodySchema extends ApiSchema = undefined, TResponseSchema extends ApiSchema = undefined>(
+    path: string,
+    body: unknown,
+    options: RequestOptions<TBodySchema, TResponseSchema> = {}
+  ): Promise<SchemaOutput<TResponseSchema>> {
     return request(path, { ...options, method: 'POST', body })
   },
-  patch(path, body, options = {}) {
+  patch<TBodySchema extends ApiSchema = undefined, TResponseSchema extends ApiSchema = undefined>(
+    path: string,
+    body: unknown,
+    options: RequestOptions<TBodySchema, TResponseSchema> = {}
+  ): Promise<SchemaOutput<TResponseSchema>> {
     return request(path, { ...options, method: 'PATCH', body })
   },
-  delete(path, options = {}) {
+  delete<TResponseSchema extends ApiSchema = undefined>(
+    path: string,
+    options: RequestOptions<undefined, TResponseSchema> = {}
+  ): Promise<SchemaOutput<TResponseSchema>> {
     return request(path, { ...options, method: 'DELETE' })
   }
 }

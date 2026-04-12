@@ -1,10 +1,12 @@
 import fs from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import fastify from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import staticPlugin from '@fastify/static'
 import { DateTime } from 'luxon'
+import { z } from 'zod'
 import {
   authResponseSchema,
   boardResponseSchema,
@@ -24,20 +26,53 @@ import {
   updateSessionBodySchema,
   weeklyAnalysisQuerySchema,
   weeklyAnalysisResponseSchema
-} from '../../shared/index.js'
-import { config, paths } from './config.js'
-import { buildMonthlyAnalysis, buildWeeklyAnalysis, resolveMonth, resolveWeek } from './analysis.js'
-import { createDb, hasSessionOverlap, seedAdminUser, seedDefaultBoards } from './db.js'
-import { verifyPassword } from './password.js'
+} from '../../shared/index.ts'
+import type { Board, Session, SleepType, User } from '../../shared/index.ts'
+import type { AnalysisRow } from './analysis.ts'
+import { config, paths } from './config.ts'
+import { buildMonthlyAnalysis, buildWeeklyAnalysis, resolveMonth, resolveWeek } from './analysis.ts'
+import type { SleepDatabase } from './db.ts'
+import { createDb, hasSessionOverlap, seedAdminUser, seedDefaultBoards } from './db.ts'
+import { verifyPassword } from './password.ts'
 
-const SESSION_COOKIE = config.sessionCookieName
-const SLEEP_TYPES = new Set(['night', 'nap', 'fragmented'])
-
-function nowUtcIso() {
-  return DateTime.utc().toISO({ suppressMilliseconds: true })
+interface BoardRow {
+  id: number
+  name: string
+  description: string | null
+  birth_date: string | null
+  created_at: string
+  updated_at: string
 }
 
-function boardDto(row) {
+interface SessionRow {
+  id: number
+  board_id: number
+  type: SleepType
+  start_at: string
+  end_at: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface LoginUserRow extends User {
+  password_hash: string
+}
+
+interface SessionUserRow extends User {}
+
+interface CountRow {
+  total: number
+}
+
+const SESSION_COOKIE = config.sessionCookieName
+const SLEEP_TYPES = new Set<SleepType>(['night', 'nap', 'fragmented'])
+
+function nowUtcIso(): string {
+  return DateTime.utc().toISO({ suppressMilliseconds: true }) ?? ''
+}
+
+function boardDto(row: BoardRow): Board {
   return {
     id: row.id,
     name: row.name,
@@ -48,7 +83,7 @@ function boardDto(row) {
   }
 }
 
-function sessionDto(row) {
+function sessionDto(row: SessionRow): Session {
   return {
     id: row.id,
     boardId: row.board_id,
@@ -61,7 +96,7 @@ function sessionDto(row) {
   }
 }
 
-function parseTimeInput(value, fieldName, timezone = config.defaultTimezone) {
+function parseTimeInput(value: string, fieldName: string, timezone = config.defaultTimezone): string {
   if (!value || typeof value !== 'string') {
     throw new Error(`${fieldName} 不能为空`)
   }
@@ -78,10 +113,10 @@ function parseTimeInput(value, fieldName, timezone = config.defaultTimezone) {
     throw new Error(`${fieldName} 时间格式无效`)
   }
 
-  return dt.toUTC().toISO({ suppressMilliseconds: true })
+  return dt.toUTC().toISO({ suppressMilliseconds: true }) ?? ''
 }
 
-function parseOptionalTimeInput(value, fieldName, timezone = config.defaultTimezone) {
+function parseOptionalTimeInput(value: string | null | undefined, fieldName: string, timezone = config.defaultTimezone) {
   if (value === undefined || value === null || value === '') {
     return null
   }
@@ -89,7 +124,7 @@ function parseOptionalTimeInput(value, fieldName, timezone = config.defaultTimez
   return parseTimeInput(value, fieldName, timezone)
 }
 
-function parseBirthDateInput(value) {
+function parseBirthDateInput(value: string | null | undefined): string | null {
   if (value === undefined || value === null || value === '') {
     return null
   }
@@ -111,14 +146,14 @@ function parseBirthDateInput(value) {
   return raw
 }
 
-function normalizeType(type) {
+function normalizeType(type: SleepType): SleepType {
   if (!SLEEP_TYPES.has(type)) {
     throw new Error('type 仅支持 night、nap、fragmented')
   }
   return type
 }
 
-function cleanNote(note) {
+function cleanNote(note: string | null | undefined): string {
   if (note === null || note === undefined) {
     return ''
   }
@@ -126,7 +161,7 @@ function cleanNote(note) {
   return String(note).trim()
 }
 
-function validateRange(startAt, endAt) {
+function validateRange(startAt: string, endAt: string | null): void {
   if (!endAt) {
     return
   }
@@ -136,7 +171,7 @@ function validateRange(startAt, endAt) {
   }
 }
 
-const FIELD_LABELS = {
+const FIELD_LABELS: Record<string, string> = {
   username: '用户名',
   password: '密码',
   name: 'Board 名称',
@@ -156,7 +191,7 @@ const FIELD_LABELS = {
   tz: 'tz'
 }
 
-function fieldLabel(path) {
+function fieldLabel(path: PropertyKey[]): string {
   const target = path[path.length - 1]
   if (typeof target === 'string' && FIELD_LABELS[target]) {
     return FIELD_LABELS[target]
@@ -165,7 +200,7 @@ function fieldLabel(path) {
   return '请求参数'
 }
 
-function formatValidationError(error, fallbackMessage = '参数错误') {
+function formatValidationError(error: z.ZodError, fallbackMessage = '参数错误'): string {
   const issue = error.issues?.[0]
   if (!issue) {
     return fallbackMessage
@@ -224,7 +259,12 @@ function formatValidationError(error, fallbackMessage = '参数错误') {
   return issue.message || fallbackMessage
 }
 
-function parseInput(reply, schema, value, fallbackMessage) {
+function parseInput<TSchema extends z.ZodTypeAny>(
+  reply: FastifyReply,
+  schema: TSchema,
+  value: unknown,
+  fallbackMessage: string
+): z.output<TSchema> | null {
   const result = schema.safeParse(value)
   if (!result.success) {
     sendError(reply, 400, formatValidationError(result.error, fallbackMessage))
@@ -234,15 +274,20 @@ function parseInput(reply, schema, value, fallbackMessage) {
   return result.data
 }
 
-function sendError(reply, statusCode, message) {
+function sendError(reply: FastifyReply, statusCode: number, message: string) {
   return reply.code(statusCode).send(errorResponseSchema.parse({ message }))
 }
 
-function sendValidated(reply, schema, payload, statusCode = 200) {
+function sendValidated<TSchema extends z.ZodTypeAny>(
+  reply: FastifyReply,
+  schema: TSchema,
+  payload: unknown,
+  statusCode = 200
+) {
   return reply.code(statusCode).send(schema.parse(payload))
 }
 
-const db = createDb()
+const db: SleepDatabase = createDb()
 const seededAdmin = seedAdminUser(db)
 const seededBoards = seedDefaultBoards(db)
 
@@ -270,12 +315,13 @@ await app.register(cors, {
   }
 })
 
-function createSession(userId) {
+function createSession(userId: number): { token: string; expiresAt: string } {
   const token = randomBytes(32).toString('hex')
   const createdAt = nowUtcIso()
-  const expiresAt = DateTime.utc()
+  const expiresAt =
+    DateTime.utc()
     .plus({ days: config.sessionTtlDays })
-    .toISO({ suppressMilliseconds: true })
+    .toISO({ suppressMilliseconds: true }) ?? ''
 
   db.prepare('INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(
     token,
@@ -287,14 +333,14 @@ function createSession(userId) {
   return { token, expiresAt }
 }
 
-function removeSession(token) {
+function removeSession(token: string | undefined): void {
   if (!token) {
     return
   }
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token)
 }
 
-function setSessionCookie(reply, token, expiresAt) {
+function setSessionCookie(reply: FastifyReply, token: string, expiresAt: string): void {
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,
@@ -304,7 +350,7 @@ function setSessionCookie(reply, token, expiresAt) {
   })
 }
 
-function clearSessionCookie(reply) {
+function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, {
     path: '/',
     httpOnly: true,
@@ -313,13 +359,13 @@ function clearSessionCookie(reply) {
   })
 }
 
-function getSessionUser(token) {
+function getSessionUser(token: string | undefined): SessionUserRow | null {
   if (!token) {
     return null
   }
 
   const now = nowUtcIso()
-  return db
+  const user = db
     .prepare(
       `
       SELECT u.id, u.username
@@ -330,10 +376,12 @@ function getSessionUser(token) {
       LIMIT 1
     `
     )
-    .get(token, now)
+    .get(token, now) as SessionUserRow | undefined
+
+  return user ?? null
 }
 
-async function requireAuth(request, reply) {
+async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const token = request.cookies[SESSION_COOKIE]
   const user = getSessionUser(token)
 
@@ -346,8 +394,8 @@ async function requireAuth(request, reply) {
   request.user = user
 }
 
-function findBoard(boardId) {
-  return db.prepare('SELECT * FROM boards WHERE id = ? LIMIT 1').get(boardId)
+function findBoard(boardId: number): BoardRow | undefined {
+  return db.prepare('SELECT * FROM boards WHERE id = ? LIMIT 1').get(boardId) as BoardRow | undefined
 }
 
 app.get('/api/health', async () => okResponseSchema.parse({ ok: true }))
@@ -360,7 +408,7 @@ app.post('/api/auth/login', async (request, reply) => {
 
   const user = db
     .prepare('SELECT id, username, password_hash FROM users WHERE username = ? LIMIT 1')
-    .get(body.username)
+    .get(body.username) as LoginUserRow | undefined
 
   if (!user || !verifyPassword(body.password, user.password_hash)) {
     sendError(reply, 401, '用户名或密码错误')
@@ -395,7 +443,7 @@ app.get('/api/auth/me', { preHandler: requireAuth }, async (request) => {
 })
 
 app.get('/api/boards', { preHandler: requireAuth }, async () => {
-  const rows = db.prepare('SELECT * FROM boards ORDER BY updated_at DESC, id DESC').all()
+  const rows = db.prepare('SELECT * FROM boards ORDER BY updated_at DESC, id DESC').all() as BoardRow[]
   return boardsResponseSchema.parse({
     boards: rows.map(boardDto)
   })
@@ -440,6 +488,11 @@ app.post('/api/boards', { preHandler: requireAuth }, async (request, reply) => {
       .run(name, description, birthDate, now, now)
 
   const board = findBoard(Number(result.lastInsertRowid))
+  if (!board) {
+    sendError(reply, 500, 'Board 创建失败')
+    return
+  }
+
   sendValidated(reply, boardResponseSchema, { board: boardDto(board) }, 201)
 })
 
@@ -481,6 +534,11 @@ app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply)
   )
 
   const updated = findBoard(boardId)
+  if (!updated) {
+    sendError(reply, 500, 'Board 更新失败')
+    return
+  }
+
   sendValidated(reply, boardResponseSchema, { board: boardDto(updated) })
 })
 
@@ -519,7 +577,7 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
 
   const { type, page } = query
   const pageSize = Math.min(query.pageSize, 200)
-  const params = [boardId]
+  const params: Array<number | string> = [boardId]
   let whereClause = 'WHERE board_id = ?'
 
   if (type !== 'all') {
@@ -527,7 +585,7 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
     params.push(type)
   }
 
-  const countRow = db.prepare(`SELECT COUNT(*) AS total FROM sleep_sessions ${whereClause}`).get(...params)
+  const countRow = db.prepare(`SELECT COUNT(*) AS total FROM sleep_sessions ${whereClause}`).get(...params) as CountRow | undefined
   const total = Number(countRow?.total || 0)
   const totalPages = total === 0 ? 1 : Math.ceil(total / pageSize)
   const currentPage = Math.min(page, totalPages)
@@ -542,7 +600,7 @@ app.get('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request,
       LIMIT ? OFFSET ?
     `
     )
-    .all(...params, pageSize, offset)
+    .all(...params, pageSize, offset) as SessionRow[]
 
   sendValidated(reply, sessionsResponseSchema, {
     sessions: rows.map(sessionDto),
@@ -598,7 +656,14 @@ app.post('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request
 
     db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').run(now, boardId)
 
-    const created = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(Number(result.lastInsertRowid))
+    const created = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(Number(result.lastInsertRowid)) as
+      | SessionRow
+      | undefined
+    if (!created) {
+      sendError(reply, 500, '记录创建失败')
+      return
+    }
+
     sendValidated(reply, sessionResponseSchema, { session: sessionDto(created) }, 201)
   } catch (error) {
     sendError(reply, 400, error.message || '参数错误')
@@ -613,7 +678,7 @@ app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, repl
   }
 
   const sessionId = params.id
-  const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
+  const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId) as SessionRow | undefined
 
   if (!existing) {
     sendError(reply, 404, '记录不存在')
@@ -651,7 +716,12 @@ app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, repl
 
     db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').run(now, existing.board_id)
 
-    const updated = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
+    const updated = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId) as SessionRow | undefined
+    if (!updated) {
+      sendError(reply, 500, '记录更新失败')
+      return
+    }
+
     sendValidated(reply, sessionResponseSchema, { session: sessionDto(updated) })
   } catch (error) {
     sendError(reply, 400, error.message || '参数错误')
@@ -665,7 +735,7 @@ app.delete('/api/sessions/:id', { preHandler: requireAuth }, async (request, rep
   }
 
   const sessionId = params.id
-  const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId)
+  const existing = db.prepare('SELECT * FROM sleep_sessions WHERE id = ?').get(sessionId) as SessionRow | undefined
 
   if (!existing) {
     sendError(reply, 404, '记录不存在')
@@ -707,7 +777,7 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
         ORDER BY end_at ASC
       `
       )
-      .all(boardId, weekRange.startUtc, weekRange.endUtc)
+      .all(boardId, weekRange.startUtc, weekRange.endUtc) as AnalysisRow[]
 
     const baseAnalysis = buildWeeklyAnalysis(rows, weekRange, timezone, {
       boardBirthDate: board.birth_date || null
@@ -761,7 +831,7 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
         ORDER BY end_at ASC
       `
       )
-      .all(boardId, monthRange.startUtc, monthRange.endUtc)
+      .all(boardId, monthRange.startUtc, monthRange.endUtc) as AnalysisRow[]
 
     const baseAnalysis = buildMonthlyAnalysis(rows, monthRange, timezone, {
       boardBirthDate: board.birth_date || null

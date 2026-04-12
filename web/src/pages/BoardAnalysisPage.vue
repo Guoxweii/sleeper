@@ -1,10 +1,11 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
-import { api } from '../lib/api'
-import { boardResponseSchema, weeklyAnalysisResponseSchema } from '../../../shared/index.js'
-import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
+import { api } from '../lib/api.ts'
+import { boardResponseSchema, weeklyAnalysisResponseSchema } from '../../../shared/index.ts'
+import type { AnalysisReview, AnalysisSourceRecord, AnalysisTypeTotals, Board, ReviewStatus, WeeklyAnalysis } from '../../../shared/index.ts'
+import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt.ts'
 import {
   buildIsoWeekOptions,
   buildRecentYears,
@@ -14,7 +15,7 @@ import {
   formatIsoWeekSummary,
   formatTypeLabel,
   parseIsoWeekValue
-} from '../lib/time'
+} from '../lib/time.ts'
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
@@ -22,8 +23,8 @@ const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shang
 const initialWeek = currentIsoWeek()
 const initialWeekParts = parseIsoWeekValue(initialWeek)
 
-const board = ref(null)
-const analysis = ref(null)
+const board = ref<Board | null>(null)
+const analysis = ref<WeeklyAnalysis | null>(null)
 const week = ref(initialWeek)
 const weekYear = ref(initialWeekParts?.weekYear || new Date().getFullYear())
 const loading = ref(true)
@@ -35,13 +36,13 @@ const availableWeekYears = buildRecentYears(initialWeekParts?.weekYear || new Da
 let latestPageLoadId = 0
 let latestAnalysisLoadId = 0
 
-async function fetchBoardData(targetBoardId) {
+async function fetchBoardData(targetBoardId: number) {
   return api.get(`/api/boards/${targetBoardId}`, {
     responseSchema: boardResponseSchema
   })
 }
 
-async function fetchAnalysisData(targetBoardId, targetWeek) {
+async function fetchAnalysisData(targetBoardId: number, targetWeek: string) {
   return api.get(
     `/api/boards/${targetBoardId}/analysis/weekly?week=${encodeURIComponent(targetWeek)}&tz=${encodeURIComponent(timezone)}`,
     {
@@ -50,11 +51,11 @@ async function fetchAnalysisData(targetBoardId, targetWeek) {
   )
 }
 
-function isCurrentLoad(loadId, targetBoardId, targetWeek) {
+function isCurrentLoad(loadId: number, targetBoardId: number, targetWeek: string): boolean {
   return loadId === latestAnalysisLoadId && targetBoardId === boardId.value && targetWeek === week.value
 }
 
-async function loadPage() {
+async function loadPage(): Promise<void> {
   const pageLoadId = ++latestPageLoadId
   const analysisLoadId = ++latestAnalysisLoadId
   const targetBoardId = boardId.value
@@ -97,7 +98,7 @@ async function loadPage() {
   }
 }
 
-async function reloadAnalysisOnly() {
+async function reloadAnalysisOnly(): Promise<void> {
   const loadId = ++latestAnalysisLoadId
   const targetBoardId = boardId.value
   const targetWeek = week.value
@@ -132,13 +133,13 @@ const maxDailyMinutes = computed(() => {
   return Math.max(...values, 1)
 })
 
-const typeRows = computed(() => {
-  const source = analysis.value?.totals?.byType || {}
-  return [source.night, source.nap, source.fragmented].filter(Boolean)
+const typeRows = computed<AnalysisTypeTotals[]>(() => {
+  const source = analysis.value?.totals.byType
+  return source ? [source.night, source.nap, source.fragmented] : []
 })
 
-const review = computed(() => analysis.value?.review || null)
-const sourceRecords = computed(() => analysis.value?.sourceRecords || [])
+const review = computed<AnalysisReview | null>(() => analysis.value?.review || null)
+const sourceRecords = computed<AnalysisSourceRecord[]>(() => analysis.value?.sourceRecords || [])
 const weekOptions = computed(() => buildIsoWeekOptions(weekYear.value))
 const currentWeekSummary = computed(() => formatIsoWeekSummary(week.value))
 
@@ -170,7 +171,7 @@ const reviewBasisText = computed(() => {
   return `评测标准：${basis}；建议日睡眠 ${meta.recommendedDurationHours} 小时；建议入睡/醒来 ${meta.recommendedSleepTime} / ${meta.recommendedWakeTime}。`
 })
 
-const reviewStatusLabel = {
+const reviewStatusLabel: Record<ReviewStatus, string> = {
   excellent: '优秀',
   good: '良好',
   attention: '关注',
@@ -178,7 +179,7 @@ const reviewStatusLabel = {
   insufficient: '数据不足'
 }
 
-function reviewStatusClass(status) {
+function reviewStatusClass(status: ReviewStatus): string {
   if (status === 'excellent') {
     return 'bg-emerald-100 text-emerald-700'
   }
@@ -194,7 +195,7 @@ function reviewStatusClass(status) {
   return 'bg-slate-100 text-slate-600'
 }
 
-async function copyPromptForAi() {
+async function copyPromptForAi(): Promise<void> {
   if (!aiConsultPrompt.value || copyingPrompt.value) {
     return
   }
@@ -212,7 +213,7 @@ async function copyPromptForAi() {
   }
 }
 
-function barHeight(minutes) {
+function barHeight(minutes: number): string {
   const ratio = (minutes / maxDailyMinutes.value) * 100
   return `${Math.max(ratio, 5)}%`
 }

@@ -1,7 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth.ts'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -15,7 +15,7 @@ const form = reactive({
 const loading = ref(false)
 const errorMessage = ref('')
 
-async function submitLogin() {
+async function submitLogin(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
 

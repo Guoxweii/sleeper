@@ -1,6 +1,78 @@
 import { DateTime } from 'luxon'
+import type {
+  AnalysisReview,
+  AnalysisTypeTotals,
+  MonthlyAnalysis,
+  ReviewDimensionKey,
+  ReviewProfileId,
+  ReviewStatus,
+  SleepType,
+  WeeklyAnalysis
+} from '../../shared/index.ts'
 
-const TYPE_LABELS = {
+export interface AnalysisRow {
+  type: SleepType
+  start_at: string
+  end_at: string | null
+}
+
+export interface WeekRange {
+  weekId: string
+  startLocal: DateTime
+  endLocal: DateTime
+  startUtc: string
+  endUtc: string
+}
+
+export interface MonthRange {
+  monthId: string
+  startLocal: DateTime
+  endLocal: DateTime
+  daysInMonth: number
+  startUtc: string
+  endUtc: string
+}
+
+interface SleepProfile {
+  id: ReviewProfileId
+  label: string
+  minMonths: number
+  maxMonths: number
+  minMinutes: number
+  maxMinutes: number
+  targetSleepMinutes: number
+  targetWakeMinutes: number
+}
+
+interface AnalysisDimensionResult {
+  key: ReviewDimensionKey
+  label: string
+  score: number
+  status: ReviewStatus
+  message: string
+  suggestion: string
+}
+
+interface AnalysisAgeContext {
+  source: 'birth_date' | 'default'
+  age: {
+    years: number
+    months: number
+    totalMonths: number
+  } | null
+  profile: SleepProfile
+}
+
+interface AnalysisBuildOptions {
+  boardBirthDate?: string | null
+}
+
+type AnalysisByTypeTotals = Record<SleepType, AnalysisTypeTotals>
+
+type WeeklyAnalysisBase = Omit<WeeklyAnalysis, 'sourceRecords'>
+type MonthlyAnalysisBase = Omit<MonthlyAnalysis, 'sourceRecords'>
+
+const TYPE_LABELS: Record<SleepType, string> = {
   night: '夜间睡眠',
   nap: '午睡',
   fragmented: '零星睡眠'
@@ -8,7 +80,7 @@ const TYPE_LABELS = {
 
 const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-const SLEEP_PROFILES = [
+const SLEEP_PROFILES: SleepProfile[] = [
   {
     id: 'infant',
     label: '婴儿（4-11个月）',
@@ -73,15 +145,15 @@ const SLEEP_PROFILES = [
 
 const DEFAULT_PROFILE = SLEEP_PROFILES[SLEEP_PROFILES.length - 1]
 
-function toIsoWeek(weekYear, weekNumber) {
+function toIsoWeek(weekYear: number, weekNumber: number): string {
   return `${weekYear}-W${String(weekNumber).padStart(2, '0')}`
 }
 
-function toIsoMonth(year, month) {
+function toIsoMonth(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
-function parseWeekOrCurrent(week, timezone) {
+function parseWeekOrCurrent(week: string | null | undefined, timezone: string) {
   if (!week) {
     const now = DateTime.now().setZone(timezone)
     return {
@@ -101,7 +173,7 @@ function parseWeekOrCurrent(week, timezone) {
   }
 }
 
-function parseMonthOrCurrent(month, timezone) {
+function parseMonthOrCurrent(month: string | null | undefined, timezone: string) {
   if (!month) {
     const now = DateTime.now().setZone(timezone)
     return {
@@ -121,11 +193,11 @@ function parseMonthOrCurrent(month, timezone) {
   }
 }
 
-function clockMinutes(dateTime) {
+function clockMinutes(dateTime: DateTime): number {
   return dateTime.hour * 60 + dateTime.minute
 }
 
-function averageClockMinutes(values) {
+function averageClockMinutes(values: number[]): number | null {
   if (!values.length) {
     return null
   }
@@ -149,7 +221,7 @@ function averageClockMinutes(values) {
   return Math.round((angle / (2 * Math.PI)) * 1440) % 1440
 }
 
-function formatClock(minutes) {
+function formatClock(minutes: number | null): string | null {
   if (minutes === null) {
     return null
   }
@@ -160,7 +232,7 @@ function formatClock(minutes) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-function clampDurationMinutes(start, end) {
+function clampDurationMinutes(start: DateTime, end: DateTime): number {
   const minutes = end.diff(start, 'minutes').minutes
   if (!Number.isFinite(minutes) || minutes <= 0) {
     return 0
@@ -169,30 +241,34 @@ function clampDurationMinutes(start, end) {
   return minutes
 }
 
-function clampScore(score) {
+function clampScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
-function circularDistanceMinutes(a, b) {
+function circularDistanceMinutes(a: number, b: number): number {
   const diff = Math.abs(a - b)
   return Math.min(diff, 1440 - diff)
 }
 
-function signedClockDifferenceMinutes(value, target) {
+function signedClockDifferenceMinutes(value: number, target: number): number {
   const normalized = ((value - target + 720) % 1440 + 1440) % 1440
   return normalized - 720
 }
 
-function formatHourValue(minutes) {
+function formatHourValue(minutes: number): string {
   const hours = minutes / 60
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
 }
 
-function formatSleepHourRange(profile) {
+function formatSleepHourRange(profile: SleepProfile): string {
   return `${formatHourValue(profile.minMinutes)}-${formatHourValue(profile.maxMinutes)}`
 }
 
-function resolveAgeContext(boardBirthDate, referenceLocal, timezone) {
+function resolveAgeContext(
+  boardBirthDate: string | null | undefined,
+  referenceLocal: DateTime,
+  timezone: string
+): AnalysisAgeContext {
   if (!boardBirthDate) {
     return {
       source: 'default',
@@ -234,7 +310,7 @@ function resolveAgeContext(boardBirthDate, referenceLocal, timezone) {
   }
 }
 
-function averageCircularDistance(values, center) {
+function averageCircularDistance(values: number[], center: number | null): number {
   if (!values.length || center === null) {
     return 0
   }
@@ -243,7 +319,7 @@ function averageCircularDistance(values, center) {
   return total / values.length
 }
 
-function scoreStatus(score) {
+function scoreStatus(score: number): ReviewStatus {
   if (score >= 85) {
     return 'excellent'
   }
@@ -256,7 +332,7 @@ function scoreStatus(score) {
   return 'poor'
 }
 
-function scoreLevel(score) {
+function scoreLevel(score: number): string {
   if (score >= 85) {
     return '优秀'
   }
@@ -269,7 +345,7 @@ function scoreLevel(score) {
   return '待改善'
 }
 
-function buildDurationDimension({ averageDailyMinutes, activeDays, profile }) {
+function buildDurationDimension({ averageDailyMinutes, activeDays, profile }): AnalysisDimensionResult {
   const recommendedRange = formatSleepHourRange(profile)
   if (activeDays === 0) {
     return {
@@ -314,7 +390,7 @@ function buildDurationDimension({ averageDailyMinutes, activeDays, profile }) {
   }
 }
 
-function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinutes, nightSamples, profile }) {
+function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinutes, nightSamples, profile }): AnalysisDimensionResult {
   if (!nightSamples) {
     return {
       key: 'timing',
@@ -373,7 +449,7 @@ function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinute
   }
 }
 
-function buildRegularityDimension({ activeDailyValues, activeDays, sleepClockSamples, averageSleepClockMinutes }) {
+function buildRegularityDimension({ activeDailyValues, activeDays, sleepClockSamples, averageSleepClockMinutes }): AnalysisDimensionResult {
   if (activeDays <= 2) {
     return {
       key: 'regularity',
@@ -417,7 +493,7 @@ function buildRegularityDimension({ activeDailyValues, activeDays, sleepClockSam
   }
 }
 
-function buildStructureDimension({ byType }) {
+function buildStructureDimension({ byType }: { byType: AnalysisByTypeTotals }): AnalysisDimensionResult {
   const nightRatio = byType.night?.percentage || 0
   const napRatio = byType.nap?.percentage || 0
   const fragmentedRatio = byType.fragmented?.percentage || 0
@@ -468,7 +544,7 @@ function buildProfessionalReview({
   boardBirthDate,
   referenceDateLocal,
   timezone
-}) {
+}): AnalysisReview {
   const ageContext = resolveAgeContext(boardBirthDate, referenceDateLocal, timezone)
   const profile = ageContext.profile
   const activeDailyValues = dailyValues.filter((value) => value > 0)
@@ -548,8 +624,15 @@ function buildProfessionalReview({
   }
 }
 
-function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, labels, options = {}) {
-  const typeMinutes = {
+function buildAnalysisByWakeDay(
+  rows: AnalysisRow[],
+  rangeStartLocal: DateTime,
+  rangeEndLocal: DateTime,
+  timezone: string,
+  labels: string[],
+  options: AnalysisBuildOptions = {}
+) {
+  const typeMinutes: Record<SleepType, number> = {
     night: 0,
     nap: 0,
     fragmented: 0
@@ -608,13 +691,14 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
 
   const byType = Object.entries(typeMinutes).reduce((acc, [type, minutes]) => {
     const ratio = totalMinutes > 0 ? (minutes / totalMinutes) * 100 : 0
-    acc[type] = {
-      label: TYPE_LABELS[type],
+    const sleepType = type as SleepType
+    acc[sleepType] = {
+      label: TYPE_LABELS[sleepType],
       minutes: Math.round(minutes),
       percentage: Number(ratio.toFixed(1))
     }
     return acc
-  }, {})
+  }, {} as AnalysisByTypeTotals)
 
   const daily = dayMinutes.map((minutes, index) => {
     const currentDate = rangeStartLocal.plus({ days: index })
@@ -640,7 +724,7 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
   })
 
   return {
-    assignmentRule: 'wake_day',
+    assignmentRule: 'wake_day' as const,
     totals: {
       totalMinutes: Math.round(totalMinutes),
       averageDailyMinutes: periodDays > 0 ? Math.round(totalMinutes / periodDays) : 0,
@@ -655,7 +739,7 @@ function buildAnalysisByWakeDay(rows, rangeStartLocal, rangeEndLocal, timezone, 
   }
 }
 
-export function resolveWeek(week, timezone) {
+export function resolveWeek(week: string | null | undefined, timezone: string): WeekRange {
   const zoneNow = DateTime.now().setZone(timezone)
   if (!zoneNow.isValid) {
     throw new Error('无效时区，请传入 IANA 格式时区，例如 Asia/Shanghai')
@@ -690,7 +774,7 @@ export function resolveWeek(week, timezone) {
   }
 }
 
-export function resolveMonth(month, timezone) {
+export function resolveMonth(month: string | null | undefined, timezone: string): MonthRange {
   const zoneNow = DateTime.now().setZone(timezone)
   if (!zoneNow.isValid) {
     throw new Error('无效时区，请传入 IANA 格式时区，例如 Asia/Shanghai')
@@ -726,7 +810,12 @@ export function resolveMonth(month, timezone) {
   }
 }
 
-export function buildWeeklyAnalysis(rows, weekRange, timezone, options = {}) {
+export function buildWeeklyAnalysis(
+  rows: AnalysisRow[],
+  weekRange: WeekRange,
+  timezone: string,
+  options: AnalysisBuildOptions = {}
+): WeeklyAnalysisBase {
   const base = buildAnalysisByWakeDay(rows, weekRange.startLocal, weekRange.endLocal, timezone, WEEKDAY_LABELS, options)
 
   return {
@@ -743,7 +832,12 @@ export function buildWeeklyAnalysis(rows, weekRange, timezone, options = {}) {
   }
 }
 
-export function buildMonthlyAnalysis(rows, monthRange, timezone, options = {}) {
+export function buildMonthlyAnalysis(
+  rows: AnalysisRow[],
+  monthRange: MonthRange,
+  timezone: string,
+  options: AnalysisBuildOptions = {}
+): MonthlyAnalysisBase {
   const dayLabels = Array.from({ length: monthRange.daysInMonth }, (_, index) => `${index + 1}日`)
   const base = buildAnalysisByWakeDay(
     rows,

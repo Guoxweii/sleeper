@@ -10,7 +10,7 @@ import {
   reviewStatusSchema,
   sleepTypeSchema,
   timezoneSchema
-} from './base.js'
+} from './base.ts'
 
 const analysisTypeTotalsSchema = z
   .object({
@@ -129,3 +129,13 @@ export const monthlyAnalysisSchema = z
     sourceRecords: z.array(analysisSourceRecordSchema)
   })
   .strict()
+
+export type AnalysisTypeTotals = z.output<typeof analysisTypeTotalsSchema>
+export type AnalysisTotals = z.output<typeof analysisTotalsSchema>
+export type AnalysisDailyItem = z.output<typeof analysisDailyItemSchema>
+export type AnalysisReviewDimension = z.output<typeof analysisReviewDimensionSchema>
+export type AnalysisReviewAge = z.output<typeof analysisReviewAgeSchema>
+export type AnalysisReview = z.output<typeof analysisReviewSchema>
+export type AnalysisSourceRecord = z.output<typeof analysisSourceRecordSchema>
+export type WeeklyAnalysis = z.output<typeof weeklyAnalysisSchema>
+export type MonthlyAnalysis = z.output<typeof monthlyAnalysisSchema>

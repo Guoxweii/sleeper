@@ -1,4 +1,4 @@
-import { createDb, seedAdminUser, seedDefaultBoards } from '../src/db.js'
+import { createDb, seedAdminUser, seedDefaultBoards } from '../src/db.ts'
 
 const db = createDb()
 
