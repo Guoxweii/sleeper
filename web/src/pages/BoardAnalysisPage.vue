@@ -4,19 +4,32 @@ import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
 import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
-import { currentIsoWeek, formatDateTimeWithWeekday, formatDuration, formatTypeLabel } from '../lib/time'
+import {
+  buildIsoWeekOptions,
+  buildRecentYears,
+  currentIsoWeek,
+  formatDateTimeWithWeekday,
+  formatDuration,
+  formatIsoWeekSummary,
+  formatTypeLabel,
+  parseIsoWeekValue
+} from '../lib/time'
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
+const initialWeek = currentIsoWeek()
+const initialWeekParts = parseIsoWeekValue(initialWeek)
 
 const board = ref(null)
 const analysis = ref(null)
-const week = ref(currentIsoWeek())
+const week = ref(initialWeek)
+const weekYear = ref(initialWeekParts?.weekYear || new Date().getFullYear())
 const loading = ref(true)
 const errorMessage = ref('')
 const copyMessage = ref('')
 const copyingPrompt = ref(false)
+const availableWeekYears = buildRecentYears(initialWeekParts?.weekYear || new Date().getFullYear())
 
 async function loadBoard() {
   const response = await api.get(`/api/boards/${boardId.value}`)
@@ -68,6 +81,8 @@ const typeRows = computed(() => {
 
 const review = computed(() => analysis.value?.review || null)
 const sourceRecords = computed(() => analysis.value?.sourceRecords || [])
+const weekOptions = computed(() => buildIsoWeekOptions(weekYear.value))
+const currentWeekSummary = computed(() => formatIsoWeekSummary(week.value))
 
 const aiConsultPrompt = computed(() => {
   if (!analysis.value) {
@@ -144,7 +159,28 @@ function barHeight(minutes) {
   return `${Math.max(ratio, 5)}%`
 }
 
-watch(week, reloadAnalysisOnly)
+watch(weekYear, (nextYear) => {
+  const currentWeekNumber = parseIsoWeekValue(week.value)?.weekNumber || 1
+  const currentWeekYear = parseIsoWeekValue(currentIsoWeek())?.weekYear || null
+  const options = weekOptions.value
+  const fallbackOption =
+    nextYear === currentWeekYear ? options[0] || null : options[options.length - 1] || null
+  const nextOption = options.find((item) => item.weekNumber === currentWeekNumber) || fallbackOption
+
+  if (nextOption && nextOption.value !== week.value) {
+    week.value = nextOption.value
+  }
+})
+
+watch(week, async (nextWeek) => {
+  const parts = parseIsoWeekValue(nextWeek)
+  if (parts && weekYear.value !== parts.weekYear) {
+    weekYear.value = parts.weekYear
+  }
+
+  await reloadAnalysisOnly()
+})
+
 watch(boardId, loadPage)
 
 onMounted(loadPage)
@@ -164,9 +200,19 @@ onMounted(loadPage)
     <section class="glass-card p-4">
       <div class="flex flex-wrap items-end gap-3">
         <div class="flex flex-wrap items-end gap-3">
-          <label>
+          <label class="w-full sm:w-auto sm:min-w-32">
+            <span class="field-label">年份</span>
+            <select v-model="weekYear" class="input-field">
+              <option v-for="year in availableWeekYears" :key="year" :value="year">{{ year }} 年</option>
+            </select>
+          </label>
+          <label class="w-full sm:flex-1 sm:min-w-72">
             <span class="field-label">分析周</span>
-            <input v-model="week" class="input-field" type="week" />
+            <select v-model="week" class="input-field">
+              <option v-for="option in weekOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
           </label>
           <div class="rounded-xl bg-cyan-50 px-3 py-2 text-xs text-cyan-800">时区：{{ timezone }}</div>
         </div>
@@ -179,6 +225,7 @@ onMounted(loadPage)
           {{ copyingPrompt ? '复制中...' : '复制 AI 查询内容' }}
         </button>
       </div>
+      <p v-if="currentWeekSummary" class="mt-3 text-xs text-cyan-900/70">当前：{{ currentWeekSummary }}</p>
       <p class="mt-3 text-xs text-cyan-900/65">统计口径：整段睡眠按苏醒日归属。</p>
       <p v-if="copyMessage" class="mt-2 text-xs text-cyan-800">{{ copyMessage }}</p>
     </section>

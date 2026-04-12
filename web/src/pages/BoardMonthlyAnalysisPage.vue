@@ -4,19 +4,32 @@ import { useRoute } from 'vue-router'
 import BoardTabs from '../components/BoardTabs.vue'
 import { api } from '../lib/api'
 import { buildAiConsultPrompt, copyTextToClipboard } from '../lib/analysisPrompt'
-import { currentIsoMonth, formatDateTimeWithWeekday, formatDuration, formatTypeLabel } from '../lib/time'
+import {
+  buildMonthOptions,
+  buildRecentYears,
+  currentIsoMonth,
+  formatDateTimeWithWeekday,
+  formatDuration,
+  formatIsoMonthSummary,
+  formatTypeLabel,
+  parseIsoMonthValue
+} from '../lib/time'
 
 const route = useRoute()
 const boardId = computed(() => Number(route.params.id))
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
+const initialMonth = currentIsoMonth()
+const initialMonthParts = parseIsoMonthValue(initialMonth)
 
 const board = ref(null)
 const analysis = ref(null)
-const month = ref(currentIsoMonth())
+const month = ref(initialMonth)
+const monthYear = ref(initialMonthParts?.year || new Date().getFullYear())
 const loading = ref(true)
 const errorMessage = ref('')
 const copyMessage = ref('')
 const copyingPrompt = ref(false)
+const availableMonthYears = buildRecentYears(initialMonthParts?.year || new Date().getFullYear())
 
 async function loadBoard() {
   const response = await api.get(`/api/boards/${boardId.value}`)
@@ -68,6 +81,8 @@ const typeRows = computed(() => {
 
 const review = computed(() => analysis.value?.review || null)
 const sourceRecords = computed(() => analysis.value?.sourceRecords || [])
+const monthOptions = computed(() => buildMonthOptions(monthYear.value))
+const currentMonthSummary = computed(() => formatIsoMonthSummary(month.value))
 
 const aiConsultPrompt = computed(() => {
   if (!analysis.value) {
@@ -151,7 +166,27 @@ function barHeight(minutes) {
   return `${Math.max(ratio, 5)}%`
 }
 
-watch(month, reloadAnalysisOnly)
+watch(monthYear, (nextYear) => {
+  const currentMonthNumber = parseIsoMonthValue(month.value)?.month || 1
+  const currentYearMonth = parseIsoMonthValue(currentIsoMonth())
+  const nextMonthNumber =
+    nextYear === currentYearMonth?.year ? Math.min(currentMonthNumber, currentYearMonth.month) : currentMonthNumber
+  const nextValue = `${nextYear}-${String(nextMonthNumber).padStart(2, '0')}`
+
+  if (nextValue !== month.value) {
+    month.value = nextValue
+  }
+})
+
+watch(month, async (nextMonth) => {
+  const parts = parseIsoMonthValue(nextMonth)
+  if (parts && monthYear.value !== parts.year) {
+    monthYear.value = parts.year
+  }
+
+  await reloadAnalysisOnly()
+})
+
 watch(boardId, loadPage)
 
 onMounted(loadPage)
@@ -171,9 +206,19 @@ onMounted(loadPage)
     <section class="glass-card p-4">
       <div class="flex flex-wrap items-end gap-3">
         <div class="flex flex-wrap items-end gap-3">
-          <label>
+          <label class="w-full sm:w-auto sm:min-w-32">
+            <span class="field-label">年份</span>
+            <select v-model="monthYear" class="input-field">
+              <option v-for="year in availableMonthYears" :key="year" :value="year">{{ year }} 年</option>
+            </select>
+          </label>
+          <label class="w-full sm:flex-1 sm:min-w-72">
             <span class="field-label">分析月</span>
-            <input v-model="month" class="input-field" type="month" />
+            <select v-model="month" class="input-field">
+              <option v-for="option in monthOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
           </label>
           <div class="rounded-xl bg-cyan-50 px-3 py-2 text-xs text-cyan-800">时区：{{ timezone }}</div>
         </div>
@@ -186,6 +231,7 @@ onMounted(loadPage)
           {{ copyingPrompt ? '复制中...' : '复制 AI 查询内容' }}
         </button>
       </div>
+      <p v-if="currentMonthSummary" class="mt-3 text-xs text-cyan-900/70">当前：{{ currentMonthSummary }}</p>
       <p v-if="copyMessage" class="mt-2 text-xs text-cyan-800">{{ copyMessage }}</p>
     </section>
 
