@@ -374,7 +374,7 @@ onMounted(loadPage)
           <p class="title-font mt-2 text-2xl text-cyan-950">{{ formatDuration(analysis.totals.totalMinutes) }}</p>
         </article>
         <article class="glass-card p-4">
-          <p class="text-xs text-cyan-900/60">日均睡眠</p>
+          <p class="text-xs text-cyan-900/60">日均睡眠（记录{{ analysis.totals.activeDays }}天）</p>
           <p class="title-font mt-2 text-2xl text-cyan-950">
             {{ formatDuration(analysis.totals.averageDailyMinutes) }}
           </p>
