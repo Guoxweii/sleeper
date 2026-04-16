@@ -14,6 +14,7 @@ RUN npm install
 
 COPY . .
 
+RUN npm run build --workspace server
 RUN npm run build --workspace web
 RUN npm prune --omit=dev
 

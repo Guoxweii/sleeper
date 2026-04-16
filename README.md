@@ -38,13 +38,16 @@ npm run db:init
 # 全量类型检查
 npm run typecheck
 
-# 构建前端
+# 构建前后端
 npm run build
 
-# 后端 TypeScript 检查
+# 后端构建（输出 dist）
 npm run build --workspace server
 
-# 生产启动（由 Fastify 提供前端静态资源）
+# 后端 TypeScript 检查
+npm run typecheck --workspace server
+
+# 生产启动（运行 server/dist/index.js）
 npm run start
 ```
 

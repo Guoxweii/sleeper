@@ -54,9 +54,10 @@ npm run dev:api
 
 ### Build
 
-- Main build: `npm run build` (builds frontend workspace)
+- Main build: `npm run build` (builds server and frontend workspaces)
 - Frontend only: `npm run build --workspace web`
-- Backend TS check: `npm run build --workspace server`
+- Backend build: `npm run build --workspace server`
+- Backend TS check: `npm run typecheck --workspace server`
 - Full typecheck: `npm run typecheck`
 
 ### Lint
@@ -74,7 +75,7 @@ npm run dev:api
 Since no test runner exists, use targeted checks as a single-test substitute:
 
 - Backend TypeScript check:
-  - `npm run build --workspace server`
+  - `npm run typecheck --workspace server`
 - Frontend sanity check:
   - `npm run build --workspace web`
 - Optional module smoke check (inside `server/`):
