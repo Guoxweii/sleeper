@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "start": "node dist/index.js",
     "db:init": "tsx scripts/init-db.ts",
-    "build": "tsc --noEmit -p tsconfig.json",
+    "build": "tsup --config tsup.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -19,5 +19,8 @@
     "fastify": "^4.28.1",
     "luxon": "^3.5.0",
     "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
   }
 }
