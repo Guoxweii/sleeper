@@ -93,13 +93,12 @@ function sessionCardClass(session: Session): string {
 
 function setDefaultForm(): void {
   const now = new Date()
-  const start = new Date(now.getTime() - 60 * 60 * 1000)
 
   form.type = 'night'
-  form.startAt = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
-    start.getDate()
-  ).padStart(2, '0')}T${String(start.getHours()).padStart(2, '0')}:${String(
-    start.getMinutes()
+  form.startAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(
+    now.getMinutes()
   ).padStart(2, '0')}`
   form.endAt = ''
   form.note = ''
