@@ -4,6 +4,7 @@ import fastify from 'fastify'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import staticPlugin from '@fastify/static'
 import { DateTime } from 'luxon'
 import { z } from 'zod'
@@ -274,6 +275,13 @@ function parseInput<TSchema extends z.ZodTypeAny>(
   return result.data
 }
 
+function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallbackMessage
+}
+
 function sendError(reply: FastifyReply, statusCode: number, message: string) {
   return reply.code(statusCode).send(errorResponseSchema.parse({ message }))
 }
@@ -315,6 +323,30 @@ await app.register(cors, {
   }
 })
 
+await app.register(rateLimit, {
+  global: false,
+  errorResponseBuilder: () => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    message: '操作过于频繁，请稍后再试'
+  })
+})
+
+// 统一未捕获异常的响应格式为 { message }，避免暴露 Fastify 原始错误结构
+app.setErrorHandler((error, _request, reply) => {
+  const statusCode = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500
+  if (statusCode >= 500) {
+    app.log.error(error)
+    sendError(reply, statusCode, '服务器内部错误')
+    return
+  }
+  if (statusCode === 429) {
+    sendError(reply, statusCode, '操作过于频繁，请稍后再试')
+    return
+  }
+  sendError(reply, statusCode, resolveErrorMessage(error, '请求处理失败'))
+})
+
 function createSession(userId: number): { token: string; expiresAt: string } {
   const token = randomBytes(32).toString('hex')
   const createdAt = nowUtcIso()
@@ -322,6 +354,9 @@ function createSession(userId: number): { token: string; expiresAt: string } {
     DateTime.utc()
     .plus({ days: config.sessionTtlDays })
     .toISO({ suppressMilliseconds: true }) ?? ''
+
+  // 登录时顺手清理过期 token，避免 sessions 表长期积累无效行
+  db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(createdAt)
 
   db.prepare('INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(
     token,
@@ -400,7 +435,14 @@ function findBoard(boardId: number): BoardRow | undefined {
 
 app.get('/api/health', async () => okResponseSchema.parse({ ok: true }))
 
-app.post('/api/auth/login', async (request, reply) => {
+app.post('/api/auth/login', {
+  config: {
+    rateLimit: {
+      max: 5,
+      timeWindow: '1 minute'
+    }
+  }
+}, async (request, reply) => {
   const body = parseInput(reply, loginBodySchema, request.body || {}, '请填写用户名和密码')
   if (!body) {
     return
@@ -478,7 +520,7 @@ app.post('/api/boards', { preHandler: requireAuth }, async (request, reply) => {
   try {
     birthDate = parseBirthDateInput(body.birthDate)
   } catch (error) {
-    sendError(reply, 400, error.message || 'birthDate 参数错误')
+    sendError(reply, 400, resolveErrorMessage(error, 'birthDate 参数错误'))
     return
   }
 
@@ -519,7 +561,7 @@ app.patch('/api/boards/:id', { preHandler: requireAuth }, async (request, reply)
     try {
       birthDate = parseBirthDateInput(body.birthDate)
     } catch (error) {
-      sendError(reply, 400, error.message || 'birthDate 参数错误')
+      sendError(reply, 400, resolveErrorMessage(error, 'birthDate 参数错误'))
       return
     }
   }
@@ -666,7 +708,7 @@ app.post('/api/boards/:id/sessions', { preHandler: requireAuth }, async (request
 
     sendValidated(reply, sessionResponseSchema, { session: sessionDto(created) }, 201)
   } catch (error) {
-    sendError(reply, 400, error.message || '参数错误')
+    sendError(reply, 400, resolveErrorMessage(error, '参数错误'))
   }
 })
 
@@ -724,7 +766,7 @@ app.patch('/api/sessions/:id', { preHandler: requireAuth }, async (request, repl
 
     sendValidated(reply, sessionResponseSchema, { session: sessionDto(updated) })
   } catch (error) {
-    sendError(reply, 400, error.message || '参数错误')
+    sendError(reply, 400, resolveErrorMessage(error, '参数错误'))
   }
 })
 
@@ -797,7 +839,7 @@ app.get('/api/boards/:id/analysis/weekly', { preHandler: requireAuth }, async (r
       }
     })
   } catch (error) {
-    sendError(reply, 400, error.message || '分析参数无效')
+    sendError(reply, 400, resolveErrorMessage(error, '分析参数无效'))
   }
 })
 
@@ -851,7 +893,7 @@ app.get('/api/boards/:id/analysis/monthly', { preHandler: requireAuth }, async (
       }
     })
   } catch (error) {
-    sendError(reply, 400, error.message || '分析参数无效')
+    sendError(reply, 400, resolveErrorMessage(error, '分析参数无效'))
   }
 })
 

@@ -67,6 +67,26 @@ interface AnalysisBuildOptions {
   boardBirthDate?: string | null
 }
 
+interface DurationDimensionInput {
+  averageDailyMinutes: number
+  activeDays: number
+  profile: SleepProfile
+}
+
+interface TimingDimensionInput {
+  averageSleepClockMinutes: number
+  averageWakeClockMinutes: number
+  nightSamples: boolean
+  profile: SleepProfile
+}
+
+interface RegularityDimensionInput {
+  activeDailyValues: number[]
+  activeDays: number
+  sleepClockSamples: number[]
+  averageSleepClockMinutes: number | null
+}
+
 type AnalysisByTypeTotals = Record<SleepType, AnalysisTypeTotals>
 
 type WeeklyAnalysisBase = Omit<WeeklyAnalysis, 'sourceRecords'>
@@ -345,7 +365,7 @@ function scoreLevel(score: number): string {
   return '待改善'
 }
 
-function buildDurationDimension({ averageDailyMinutes, activeDays, profile }): AnalysisDimensionResult {
+function buildDurationDimension({ averageDailyMinutes, activeDays, profile }: DurationDimensionInput): AnalysisDimensionResult {
   const recommendedRange = formatSleepHourRange(profile)
   if (activeDays === 0) {
     return {
@@ -390,7 +410,7 @@ function buildDurationDimension({ averageDailyMinutes, activeDays, profile }): A
   }
 }
 
-function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinutes, nightSamples, profile }): AnalysisDimensionResult {
+function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinutes, nightSamples, profile }: TimingDimensionInput): AnalysisDimensionResult {
   if (!nightSamples) {
     return {
       key: 'timing',
@@ -449,7 +469,7 @@ function buildTimingDimension({ averageSleepClockMinutes, averageWakeClockMinute
   }
 }
 
-function buildRegularityDimension({ activeDailyValues, activeDays, sleepClockSamples, averageSleepClockMinutes }): AnalysisDimensionResult {
+function buildRegularityDimension({ activeDailyValues, activeDays, sleepClockSamples, averageSleepClockMinutes }: RegularityDimensionInput): AnalysisDimensionResult {
   if (activeDays <= 2) {
     return {
       key: 'regularity',
@@ -571,6 +591,10 @@ function buildProfessionalReview({
   const timing = dimensions.find((item) => item.key === 'timing')
   const regularity = dimensions.find((item) => item.key === 'regularity')
   const structure = dimensions.find((item) => item.key === 'structure')
+
+  if (!duration || !timing || !regularity || !structure) {
+    throw new Error('分析维度数据不完整')
+  }
 
   const weightedScore = clampScore(
     duration.score * 0.35 + timing.score * 0.25 + regularity.score * 0.25 + structure.score * 0.15
